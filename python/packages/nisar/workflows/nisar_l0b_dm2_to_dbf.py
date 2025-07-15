@@ -25,6 +25,7 @@ from nisar.log import set_logger
 from isce3.signal import dbf_onetap_from_dm2, dbf_onetap_from_dm2_seamless
 from isce3.focus import fill_gaps, form_linear_chirp
 from nisar.workflows.helpers import build_uniform_quantizer_lut_l0b, slice_gen
+from isce3.antenna import ant2rgdop
 
 
 def copy_swath_except_echo_h5(fid_in, fid_out, swath_path, frq_pol):
@@ -177,7 +178,7 @@ def cmd_line_parser():
                            'compensated at channel transition!')
                      )
     prs.add_argument('--num-rgl', type=int, dest='num_rgl',
-                     default=5000,
+                     default=8192,
                      help='Number of range lines in each AZ block')
     prs.add_argument('--comp-level-h5', type=int, dest='comp_level_h5',
                      default=4,
@@ -222,6 +223,17 @@ def cmd_line_parser():
                            'delays shall be equal to the total number of RX '
                            'channels minus one, excluding the very first '
                            'channel.')
+                     )
+    prs.add_argument('--rx-antpat-calib', action='store_true',
+                     help=('Calibrate one-way RX power pattern in elevation '
+                           'to get rid of scalloping as a result of mosaicking'
+                           )
+                     )
+    prs.add_argument('--max-p2p-ant', type=float,
+                     help=('Max peak-to-peak dynamic range (dB) in RX antenna '
+                           'pattern correction. Default is full antenna '
+                           'pattern coverage of swath. A positive value used '
+                           'only if `rx-antpat-calib`.')
                      )
     return prs.parse_args()
 
@@ -381,6 +393,10 @@ def nisar_l0b_dm2_to_dbf(args):
     # copy entire swath except for TxRx echo products
     copy_swath_except_echo_h5(fid_in, fid_out, raw.SwathPath, frq_pol)
 
+    # get DBF sampling rate
+    fs_dbf = raw.getSampleRateDBF(freq_band, txrx_pol)
+    logger.info(f'DBF sampling rate for RD/WD/WL (MHz) -> {fs_dbf * 1e-6:.3f}')
+
     # loop over all products and bands
     # form a vector of range line slices used for all products
     rgl_slices = list(slice_gen(n_rgl_tot, args.num_rgl))
@@ -455,6 +471,82 @@ def nisar_l0b_dm2_to_dbf(args):
             # due to non-mitigated strong TX Cal loop-back chirps.
             sbsw = raw.getSubSwaths(freq_band, txrx_pol[0])
 
+            # if RX Antenna pattern calibration is required then parse
+            # EL-cut patterns and get peak locations in EL direction
+            # for all beams to be used along with `el_trans` in 2nd-order
+            # polyfitting of EL power pattern (dB) as a function of
+            # angle/slant range.
+            if args.rx_antpat_calib:
+                logger.info(
+                    f'Calibrate for EL RX power pattern of Pol "{txrx_pol[1]}"'
+                )
+                el_peaks, az_peak = ant.locate_beams_peak(txrx_pol[1])
+                logger.info(
+                    f'EL angles @ beams transitions -> {np.rad2deg(el_peaks)}'
+                    ' (deg)')
+                logger.info('AZ angle for all beams transitions -> '
+                            f'{np.rad2deg(az_peak)} (deg)')
+                el_cuts = ant.el_cut_all(txrx_pol[1])
+                # get el angle at lower and upper edge of 2-way HPBW
+                # of the first and last beam respectively to cover three
+                # points required per beam including
+                el_first, el_last = _el_swath_edges(el_cuts)
+                logger.info(
+                    'EL (first ,last) in pattern polyfitting (deg, deg) -> '
+                    f'({np.rad2deg(el_first):.3f}, {np.rad2deg(el_last):.3f})'
+                )
+                if not (el_first < el_peaks[0]):
+                    raise ValueError(
+                        f'First EL angle {np.rad2deg(el_first):.3f} (deg) is '
+                        'not smaller than the peak of the first beam '
+                        f'{np.rad2deg(el_peaks[0]):.3f} (deg)! '
+                        'Not enough EL antenna pattern coverage!'
+                    )
+                if not (el_last > el_peaks[-1]):
+                    raise ValueError(
+                        f'Last EL angle {np.rad2deg(el_last):.3f} (deg) is '
+                        'not larger than the peak of the last beam '
+                        f'{np.rad2deg(el_peaks[-1]):.3f} (deg)! '
+                        'Not enough EL antenna pattern coverage!'
+                    )
+                # form list of EL angles to be converted into slant ranges
+                # [first, peak1, intersect1-2, peak2, intersect2-3, ..., last ]
+                # 2N + 1 values for N beams
+                el_points = np.zeros(2 * num_beams + 1)
+                el_points[0] = el_first
+                el_points[-1] = el_last
+                el_points[1:-1:2] = el_peaks
+                el_points[2:-2:2] = el_trans
+                logger.info('EL points used in EL pattern polyfitting (deg) '
+                            f'-> {np.rad2deg(el_points)}')
+                # report threshold
+                if args.max_p2p_ant is not None:
+                    logger.warning(
+                        'Dynamic range of RX antenna pattern correction will '
+                        f'be limited to {args.max_p2p_ant} (dB).'
+                    )
+
+            # get chirp sampling rate for computing updated DBF WD/WL
+            # XXX For NISAR modes with zero bandwidth (no TX), the chirp
+            # slope is assumed to be `-fs / (1.2 * pw)`!
+            fs, slope, pw = _get_chirp_parameters(raw, freq_band, txrx_pol[0])
+            # form chirp reference if seamless/rangecomp requested
+            if not args.no_rgcomp:
+                chirp_ref = np.asarray(form_linear_chirp(slope, pw, fs))
+            # define a function to rescale range bin limits/coverage per
+            # channel based on DBF sampling rate for updating WD/WL in
+            # single-tap DBF.
+
+            def _rescale2dbf(rgb_limits):
+                return np.ceil(
+                    (fs_dbf / fs) * np.asarray(rgb_limits)).astype(int)
+            # parse WD/RD values for all channels over all lines
+            wd = raw.getWD(freq_band, txrx_pol)
+            rd = raw.getRD(freq_band, txrx_pol)
+            # get the first DWP over all range lines
+            # Note that first channel always carries min DWP (opens first!).
+            dwp_first = rd[:, 0] + wd[:, 0]
+
             # create a temp file for memmap of multi-channel complex
             # decoded echo to avoid possible memory allocation issue
             fid_tmp = tempfile.NamedTemporaryFile(
@@ -485,18 +577,13 @@ def nisar_l0b_dm2_to_dbf(args):
                 azt_mid = azt_raw[rgl_slice].mean()
 
                 if args.no_rgcomp:  # simply perform mosaicking
-                    echo_dbf = dbf_onetap_from_dm2(
+                    echo_dbf, rgb_limits = dbf_onetap_from_dm2(
                         dset_azblk[:, :num_rgl], azt_mid, el_trans, az_trans,
                         sr, orbit, attitude, dem, cal_coefs=amp_cal
                     )
                 else:  # perform range conv and deconv while mosaicking
                     logger.info('Perform range convolution and deconvolution!')
-                    # For NISAR modes with zero bandwidth (no TX), the chirp
-                    # slope is assumed to be `-fs / (1.2 * pw)`.
-                    fs, slope, pw = _get_chirp_parameters(
-                        raw, freq_band, txrx_pol[0])
-                    chirp_ref = np.asarray(form_linear_chirp(slope, pw, fs))
-                    echo_dbf = dbf_onetap_from_dm2_seamless(
+                    echo_dbf, rgb_limits = dbf_onetap_from_dm2_seamless(
                         dset_azblk[:, :num_rgl], chirp_ref, azt_mid, el_trans,
                         az_trans, sr, orbit, attitude, dem, n_cpu,
                         ped_win=args.win_ped, cal_coefs=amp_cal)
@@ -506,7 +593,21 @@ def nisar_l0b_dm2_to_dbf(args):
                     logger.info('Remove compression amp gain (linear)'
                                 f' -> {scalar_cg}.')
                     echo_dbf /= scalar_cg
-
+                # perform 1-way RX ANT Power Pattern calibration if requested
+                if args.rx_antpat_calib:
+                    if plot:
+                        plot_name = plot_name = out_path.joinpath(
+                            f'Plot_OneTap_DBF_EL_RxAntPat_Freq{freq_band}_'
+                            f'Pol{txrx_pol}_AzBlock{n_blk}.png'
+                        )
+                    else:
+                        plot_name = None
+                    inv_rxpat_1w = _reconstruct_inverse_el_magpat_full_swath(
+                        el_cuts, el_points, az_trans, azt_mid, sr, orbit,
+                        attitude, dem, max_p2p_ant=args.max_p2p_ant,
+                        plot_name=plot_name)
+                    # Apply the inverse of RX EL amplitude pattern to the echo
+                    echo_dbf *= inv_rxpat_1w
                 # plot float-point DBFed raster per AZ block
                 if plot:
                     plt.figure(figsize=(8, 6))
@@ -543,6 +644,19 @@ def nisar_l0b_dm2_to_dbf(args):
                 # store echo data per AZ block
                 dset_prod_out.write_direct(echo_dbf.astype(
                     'uint16').view(dset.dtype_storage), dest_sel=rgl_slice)
+
+                # compute WD/WL values to be updated per single-tap DBF
+                # use mid range line values
+                rgb_limits_dbf = _rescale2dbf(rgb_limits)
+                rgl_mid = (rgl_slice.start + rgl_slice.stop) // 2
+                wd_new, wl_new = _wd_wl_single_tap_dbf(
+                    rgb_limits_dbf, dwp_first[rgl_mid], rd[rgl_mid])
+                logger.info(f'New WDs per AZ block # {n_blk} -> {wd_new}')
+                logger.info(f'New WLs per AZ block # {n_blk} -> {wl_new}')
+                # update HDF5 datasets WD/WL per AZ block
+                grp_prod = dset_prod_out.parent
+                grp_prod['WD'][rgl_slice] = wd_new
+                grp_prod['WL'][rgl_slice] = wl_new
 
             # destroy memmap and close the temp file
             del dset_azblk, fid_tmp
@@ -619,6 +733,185 @@ def _adjust_delays_in_place(dset, sample_delays):
         for cc, delay in enumerate(sample_delays, start=1):
             if delay != 0:
                 dset[cc] = np.roll(dset[cc], shift=delay, axis=-1)
+
+
+def _el_swath_edges(el_cuts):
+    """
+    Get approximate one-way HPBW lower/upper edge for the first/last
+    beam within the swath if there is enough angular coverage in EL.
+
+    Parameters
+    ----------
+    el_cuts : AntPatCut
+
+    Returns
+    -------
+    float
+        EL angle (radians) of lower edge of the first beam
+    float
+        EL angle (radians) of upper edge of the last beam
+
+    """
+    # one-way HPBW threshold
+    threshold = 10 ** (-3 / 20)
+    # first beam (lower edge)
+    mag_first = abs(el_cuts.copol_pattern[0])
+    idx_peak = np.nanargmax(mag_first)
+    mag_hpbw = mag_first[idx_peak] * threshold
+    idx_first = np.nanargmin(abs(mag_first[:idx_peak] - mag_hpbw))
+    # last beam (upper edge)
+    mag_last = abs(el_cuts.copol_pattern[-1])
+    idx_peak = np.nanargmax(mag_last)
+    mag_hpbw = mag_last[idx_peak] * threshold
+    idx_last = np.nanargmin(abs(mag_last[idx_peak:] - mag_hpbw)) + idx_peak
+
+    return el_cuts.angle[idx_first], el_cuts.angle[idx_last]
+
+
+def _amp2db(amp: np.ndarray) -> np.ndarray:
+    return 20 * np.log10(abs(amp))
+
+
+def _reconstruct_inverse_el_magpat_full_swath(
+        el_cuts, el_points, az_bs, az_time, sr, orbit,
+        attitude, dem, max_p2p_ant=None, plot_name=None):
+    """
+    Helper function to build mosaicked (1-tap DBFed) relative (peak-normazlied)
+    inverse of one-way EL magnitude pattern as a function of slant range to be
+    used for removing one-way RX antenna pattern from mosaciked DM2.
+    This will mitigate scalloping effect in the range profiles of echo.
+
+    Parameters
+    ----------
+    el_cuts : nisar.products.readers.antenna.AntPatCut
+        It contains EL-cut patterns for all beams.
+    el_points : np.ndarray(float)
+        EL angles covering start, peaks, transitions, and end of swath
+        all in radians. The size is `2N + 1` where `N` is number of beams.
+        Bascialy, three distinct points per beam including the intersections
+        common among adjacent beams.
+    az_bs : float
+        Common azimuth boresight angle over all beams in radians
+    az_time : float
+        AZ time w.r.t. to orbit epoch in seconds
+    sr : isce3.core.Linspace
+        Slant ranges over entire swath.
+    orbit : isce3.core.Orbit
+    attitude : isce3.core.Attitude
+    dem : isce3.geometry.DEMInterpolator
+    max_p2p_ant : float, optional
+        Max peak-to-peak dynamic range of RX antenna pattern in (dB).
+        Default is full dynamic range over entire swath.
+    plot_name : str, optional
+        If provided, it will generate PNG plot of peak-normalized
+        one-tap DBFed Mosaicked one-way EL Antenna Power Pattern.
+
+    Returns
+    -------
+    np.ndarray(float)
+        1-D array of inverse of relative EL magnitude pattern (linear)
+        with the same size as `sr`.
+
+    """
+    if max_p2p_ant is not None and not (max_p2p_ant > 0):
+        raise ValueError('"max_p2p_ant" must be a positive value!')
+    # Get slant ranges at beams transition
+    pos, vel = orbit.interpolate(az_time)
+    quat = attitude.interpolate(az_time)
+    # Pass a dummy wavelength=1 since it doesn't affect the result.
+    sr_points, _, _ = ant2rgdop(el_points, az_bs, pos, vel, quat, 1, dem)
+    # convert slant ranges to range bins for beam limits
+    rgb_points = np.round((sr_points - sr.first) / sr.spacing).astype(int)
+    # replace first and the last by 0 and sr.size
+    rgb_points[0] = 0
+    rgb_points[-1] = sr.size
+    # convert slant range from meters into km for polyfitting
+    sr_points_km = 1e-3 * sr_points
+    magpat1w = np.zeros(sr.size, dtype='f8')
+    # loop over beams
+    for cc, i_start in enumerate(range(0, el_points.size - 1, 2)):
+        # get three points per beam
+        i_slice = slice(i_start, i_start + 3)
+        # interpolate EL pattern for three points of EL within a beam
+        # and get its power in dB.
+        el_gain_point3 = _amp2db(
+            np.interp(el_points[i_slice],
+                      el_cuts.angle,
+                      el_cuts.copol_pattern[cc])
+        )
+        # perform 2-order polyfit of power (dB) as a function sr (km)
+        pf_coef_db_km = np.polyfit(
+            sr_points_km[i_slice], el_gain_point3, deg=2)
+        # now get magnitude pattern over all slant range covering a beam
+        # by evaluating 2-order polyfit of power (dB) as a functon sr (km)
+        rgb_slice = slice(rgb_points[i_start], rgb_points[i_start + 2])
+        el_pow_db = np.polyval(pf_coef_db_km, 1e-3 * np.asarray(sr[rgb_slice]))
+        # store the magnitude in dB per beam
+        magpat1w[rgb_slice] = el_pow_db
+    # limit dynamic range of antenna pattern correction,
+    # that is min value wrt the peak value.
+    pk_magpat1w = np.nanmax(magpat1w)
+    if max_p2p_ant is not None:
+        threshold = pk_magpat1w - max_p2p_ant
+        magpat1w[magpat1w < threshold] = threshold
+    # plot power pattern prior to inversion
+    if plot_name is not None:
+        plt.figure(figsize=(8, 6))
+        plt.plot(np.asarray(sr) * 1e-3, magpat1w - pk_magpat1w)
+        plt.xlabel('Slant Range (km)')
+        plt.ylabel('Relative EL Power Pattern (dB)')
+        plt.title(
+            'One-tap DBFed/Mosaicked Peak-Normalized RX EL Power Pattern')
+        plt.grid(True)
+        plt.savefig(plot_name)
+        plt.close()
+    # convert to linear scale check the min value to be non-zero
+    magpat1w[:] = 10 ** (magpat1w / 20)
+    min_mag = magpat1w.min()
+    if np.isclose(min_mag, 0):
+        raise ValueError(
+            'The one-way RX EL power pattern contain zero value(s)!')
+    # inverse and peak normalized the magnitude to be multiplied with
+    # complex echo
+    magpat1w[:] = min_mag / magpat1w
+    return magpat1w
+
+
+def _wd_wl_single_tap_dbf(rgb_limits_dbf, dwp_first, rd_all):
+    """
+    Build DBFed WD/WL values per range bin limits for a single-tap DBF.
+    Note that range limits are @ DBF clock rate.
+
+    Parameters
+    ----------
+    rgb_limits_dbf : np.ndarray(int)
+        1-D array of range bin limits @DBF clock rate for all beams (channels)
+        in ascending order with size `channels + 1`.
+        For instance, the respective [start, stop] range bins for channel
+        `i` are indices `[i - 1, i]`.
+    dwp_first : uint32
+        First channel data window position (DWP) @ DBF clock rate.
+    rd_all : np.ndarray(uint32)
+        RD values for all channels @ DBF clock rate.
+        The size is equal to number of RX channels.
+
+    Returns
+    -------
+    wd : np.array(uint32)
+        Single-tap DBF WD (start of window) values for all channels.
+        The size equals to the number of RX channels.
+    wl : np.array(uint32)
+        Single-tap DBF WL (length of window) values for all channels.
+        The size equals to the number of RX channels.
+
+    """
+    n_channel = rd_all.size
+    wd = np.zeros(n_channel, dtype='uint32')
+    wl = np.zeros_like(wd)
+    for nn in range(n_channel):
+        wd[nn] = rgb_limits_dbf[nn] + dwp_first - rd_all[nn]
+        wl[nn] = rgb_limits_dbf[nn + 1] - rgb_limits_dbf[nn]
+    return wd, wl
 
 
 if __name__ == '__main__':
