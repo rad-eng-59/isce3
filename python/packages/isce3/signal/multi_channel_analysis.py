@@ -121,6 +121,12 @@ def dbf_onetap_from_dm2(
     -------
     np.ndarray(complex64)
         2-D complex composite echo data with shape (pulses, range bins)
+    np.ndarray(int)
+        1-D array of range bin limits for all beams (channels) in ascending
+        order with size `channels + 1` obtained from transition points from
+        one dominant channel to another.
+        For instance, the respective [start, stop] range bins for channel
+        `i` are indices `[i - 1, i]`.
 
     Raises
     ------
@@ -154,7 +160,7 @@ def dbf_onetap_from_dm2(
             echo[:, slice_rgb] = dset[cc, :, slice_rgb]
         else:  # apply calib
             echo[:, slice_rgb] = cal_coefs[cc] * dset[cc, :, slice_rgb]
-    return echo
+    return echo, rgb_limits
 
 
 def dbf_onetap_from_dm2_seamless(
@@ -202,6 +208,12 @@ def dbf_onetap_from_dm2_seamless(
     -------
     np.ndarray(complex64)
         2-D complex composite echo data with shape (pulses, range bins)
+    np.ndarray(int)
+        1-D array of range bin limits for all beams (channels) in ascending
+        order with size `channels + 1` obtained from transition points from
+        one dominant channel to another.
+        For instance, the respective [start, stop] range bins for channel
+        `i` are indices `[i - 1, i]`.
 
     Raises
     ------
@@ -264,7 +276,7 @@ def dbf_onetap_from_dm2_seamless(
         # adjustment but keep the total range bins!
         echo[...] = fftconvolve(echo, chirp[np.newaxis, :],
                                 mode='full', axes=1)[:, :sr.size]
-    return echo
+    return echo, rgb_limits
 
 
 def _beams_transition_rangebin_limits(
