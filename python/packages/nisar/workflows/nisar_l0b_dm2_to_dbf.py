@@ -9,6 +9,7 @@ import time
 import tempfile
 
 import numpy as np
+from scipy.signal import fftconvolve
 import h5py
 try:
     import matplotlib.pyplot as plt
@@ -530,6 +531,7 @@ def nisar_l0b_dm2_to_dbf(args):
             # XXX For NISAR modes with zero bandwidth (no TX), the chirp
             # slope is assumed to be `-fs / (1.2 * pw)`!
             fs, slope, pw = _get_chirp_parameters(raw, freq_band, txrx_pol[0])
+            nrgb_pw = np.ceil(fs * pw).astype(int)
             # form chirp reference if seamless/rangecomp requested
             if not args.no_rgcomp:
                 chirp_ref = np.asarray(form_linear_chirp(slope, pw, fs))
@@ -576,24 +578,7 @@ def nisar_l0b_dm2_to_dbf(args):
                 # mid AZ time at the center of the AZ block
                 azt_mid = azt_raw[rgl_slice].mean()
 
-                if args.no_rgcomp:  # simply perform mosaicking
-                    echo_dbf, rgb_limits = dbf_onetap_from_dm2(
-                        dset_azblk[:, :num_rgl], azt_mid, el_trans, az_trans,
-                        sr, orbit, attitude, dem, cal_coefs=amp_cal
-                    )
-                else:  # perform range conv and deconv while mosaicking
-                    logger.info('Perform range convolution and deconvolution!')
-                    echo_dbf, rgb_limits = dbf_onetap_from_dm2_seamless(
-                        dset_azblk[:, :num_rgl], chirp_ref, azt_mid, el_trans,
-                        az_trans, sr, orbit, attitude, dem, n_cpu,
-                        ped_win=args.win_ped, cal_coefs=amp_cal)
-                    # scale echo by sqrt(BW * PW) to remove compression gain
-                    # and to preserve input dynamic range
-                    scalar_cg = np.sqrt(abs(slope) * pw ** 2)
-                    logger.info('Remove compression amp gain (linear)'
-                                f' -> {scalar_cg}.')
-                    echo_dbf /= scalar_cg
-                # perform 1-way RX ANT Power Pattern calibration if requested
+                # Compute RX ANT Power Pattern calibration if requested
                 if args.rx_antpat_calib:
                     if plot:
                         plot_name = plot_name = out_path.joinpath(
@@ -606,8 +591,43 @@ def nisar_l0b_dm2_to_dbf(args):
                         el_cuts, el_points, az_trans, azt_mid, sr, orbit,
                         attitude, dem, max_p2p_ant=args.max_p2p_ant,
                         plot_name=plot_name)
+                else:  # No RX ANT Pattern Correction
+                    inv_rxpat_1w = None
+
+                if args.no_rgcomp:  # simply perform mosaicking
+                    echo_dbf, rgb_limits = dbf_onetap_from_dm2(
+                        dset_azblk[:, :num_rgl], azt_mid, el_trans, az_trans,
+                        sr, orbit, attitude, dem, cal_coefs=amp_cal
+                    )
                     # Apply the inverse of RX EL amplitude pattern to the echo
-                    echo_dbf *= inv_rxpat_1w
+                    # if requested
+                    if args.rx_antpat_calib:
+                        # XXX convolve square of `inv_rxpat_1w` by pulsewidth
+                        # prior to echo multiplication to include pulse
+                        # extension!
+                        # Alternatively, apply ANT correction after range comp
+                        # as part of RSLC workflow (preferred)!
+                        inv_rxpat_1w[...] = fftconvolve(
+                            inv_rxpat_1w**2,
+                            (1 / nrgb_pw) * np.ones(nrgb_pw),
+                            mode='full'
+                            )[:sr.size]
+                        echo_dbf *= np.sqrt(inv_rxpat_1w)
+
+                else:  # perform range conv and deconv while mosaicking
+                    logger.info('Perform range convolution and deconvolution!')
+                    echo_dbf, rgb_limits = dbf_onetap_from_dm2_seamless(
+                        dset_azblk[:, :num_rgl], chirp_ref, azt_mid, el_trans,
+                        az_trans, sr, orbit, attitude, dem, n_cpu,
+                        ped_win=args.win_ped, cal_coefs=amp_cal,
+                        inv_antpat_el=inv_rxpat_1w)
+                    # scale echo by sqrt(BW * PW) to remove compression gain
+                    # and to preserve input dynamic range
+                    scalar_cg = np.sqrt(abs(slope) * pw ** 2)
+                    logger.info('Remove compression amp gain (linear)'
+                                f' -> {scalar_cg}.')
+                    echo_dbf /= scalar_cg
+
                 # plot float-point DBFed raster per AZ block
                 if plot:
                     plt.figure(figsize=(8, 6))
