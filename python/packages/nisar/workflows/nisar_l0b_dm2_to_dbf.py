@@ -581,7 +581,7 @@ def nisar_l0b_dm2_to_dbf(args):
                 # Compute RX ANT Power Pattern calibration if requested
                 if args.rx_antpat_calib:
                     if plot:
-                        plot_name = plot_name = out_path.joinpath(
+                        plot_name = out_path.joinpath(
                             f'Plot_OneTap_DBF_EL_RxAntPat_Freq{freq_band}_'
                             f'Pol{txrx_pol}_AzBlock{n_blk}.png'
                         )
@@ -890,7 +890,9 @@ def _reconstruct_inverse_el_magpat_full_swath(
     min_mag = magpat1w.min()
     if np.isclose(min_mag, 0):
         raise ValueError(
-            'The one-way RX EL power pattern contain zero value(s)!')
+            'The one-way RX EL power pattern contain zero value(s)! '
+            'Consider using "--max-p2p-ant" option to limit dynamic range.'
+        )
     # inverse and peak normalized the magnitude to be multiplied with
     # complex echo
     magpat1w[:] = min_mag / magpat1w
