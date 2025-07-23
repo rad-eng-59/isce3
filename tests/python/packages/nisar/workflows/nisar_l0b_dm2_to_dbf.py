@@ -11,9 +11,10 @@ import iscetest
     "no_rgcomp,calib,plot,prod_name,rx_antpat_calib,max_p2p_ant",
     [
         (True, False, False, "dm2_seamed.h5", False, None),
+        (True, False, False, "dm2_seamed_antpat_calib.h5", True, None),
         (False, True, True, None, True, 6.0)
     ],
-    ids=["seamed", "seamless"]
+    ids=["seamed", "seamed_antcal", "seamless"]
 )
 def test_nisar_l0b_dm2_to_dbf(
         no_rgcomp, calib, plot, prod_name, rx_antpat_calib, max_p2p_ant):
