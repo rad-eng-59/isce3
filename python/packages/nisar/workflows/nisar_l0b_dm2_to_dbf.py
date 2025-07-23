@@ -602,17 +602,19 @@ def nisar_l0b_dm2_to_dbf(args):
                     # Apply the inverse of RX EL amplitude pattern to the echo
                     # if requested
                     if args.rx_antpat_calib:
-                        # XXX convolve square of `inv_rxpat_1w` by pulsewidth
-                        # prior to echo multiplication to include pulse
-                        # extension!
+                        # XXX convolve square of inverse of `inv_rxpat_1w` by
+                        # pulsewidth prior to echo multiplication to include
+                        # pulse extension!
                         # Alternatively, apply ANT correction after range comp
-                        # as part of RSLC workflow (preferred)!
-                        inv_rxpat_1w[...] = fftconvolve(
-                            inv_rxpat_1w**2,
-                            (1 / nrgb_pw) * np.ones(nrgb_pw),
-                            mode='full'
+                        # as part of RSLC workflow later on (preferred)!
+                        inv_rxpat_1w[...] = 1 / np.sqrt(
+                            fftconvolve(
+                                inv_rxpat_1w**(-2),
+                                (1 / nrgb_pw) * np.ones(nrgb_pw),
+                                mode='full'
                             )[:sr.size]
-                        echo_dbf *= np.sqrt(inv_rxpat_1w)
+                        )
+                        echo_dbf *= inv_rxpat_1w
 
                 else:  # perform range conv and deconv while mosaicking
                     logger.info('Perform range convolution and deconvolution!')
@@ -891,7 +893,7 @@ def _reconstruct_inverse_el_magpat_full_swath(
     if np.isclose(min_mag, 0):
         raise ValueError(
             'The one-way RX EL power pattern contain zero value(s)! '
-            'Consider using "--max-p2p-ant" option to limit dynamic range.'
+            'Consider setting "max-p2p-ant" option to limit dynamic range.'
         )
     # inverse and peak normalized the magnitude to be multiplied with
     # complex echo
