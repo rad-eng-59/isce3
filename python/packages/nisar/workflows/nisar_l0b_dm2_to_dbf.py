@@ -611,8 +611,8 @@ def nisar_l0b_dm2_to_dbf(args):
                             fftconvolve(
                                 inv_rxpat_1w**(-2),
                                 (1 / nrgb_pw) * np.ones(nrgb_pw),
-                                mode='full'
-                            )[:sr.size]
+                                mode='same'
+                            )
                         )
                         echo_dbf *= inv_rxpat_1w
 
