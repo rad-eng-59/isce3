@@ -6,6 +6,7 @@ import datetime
 import os
 import pathlib
 from collections import defaultdict
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 import json
 import h5py
@@ -69,7 +70,7 @@ def build_uniform_quantizer_lut_l0b(
     return bfpq_uq
 
 
-def slice_gen(n_smp: int, n_smp_blk: int) -> slice:
+def slice_gen(n_smp: int, n_smp_blk: int) -> Iterator[slice]:
     """slice generator.
 
     Parameters
