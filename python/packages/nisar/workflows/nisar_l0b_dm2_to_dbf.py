@@ -8,6 +8,7 @@ import os
 import time
 import tempfile
 from copy import copy
+from datetime import datetime
 
 import numpy as np
 from scipy.signal import fftconvolve
@@ -37,6 +38,7 @@ def copy_swath_except_echo_h5(
     Copy all groups and datasets under swath from input HDF5 to output
     HDF5 except for echo and optionally for desired datasets under tx and
     rx group listed by tx_keys and rx_keys.
+    "validSamplesSubSwath*" on tx group will be excluded from being copied.
 
     Parameters
     ----------
@@ -200,7 +202,7 @@ def _copy_datasets_truncated(
             continue
         else:
             data_in = dset_in[pulse_slice.start:pulse_slice.stop]
-            dset_out = grp_out.create_dataset(
+            dset_out = grp_out.require_dataset(
                 name, shape=data_in.shape, dtype=data_in.dtype, data=data_in)
             # copy attributes for the product from input
             for a_name, a_val in dset_in.attrs.items():
@@ -321,8 +323,10 @@ def cmd_line_parser():
     prs.add_argument('-p', '--product-name', type=str, dest='prod_name',
                      help=('Product science L0B HDF5 file and path name. '
                            'Default is input L0B filename with suffix '
-                           '"OneTap_DBF" added prior to the extension and is '
-                           'stored at the current directory.')
+                           '"_OneTap_DBF_<utc-first>_<utc-last>" added prior '
+                           'to the extension and is stored at the current '
+                           'directory. First/last UTC is set by first/last '
+                           'pulses to be processed.')
                      )
     prs.add_argument('--num-cpu', type=int, dest='num_cpu',
                      help=('Number of CPU/Workers used in range compression. '
@@ -557,11 +561,17 @@ def nisar_l0b_dm2_to_dbf(args):
     bfpq_uq = build_uniform_quantizer_lut_l0b(nbits)
     max_valid_int = 2**(nbits - 1) - 1
 
+    def utc2filename(dt_utc: str) -> str:
+        """Datetime UTC string into filename string"""
+        return datetime.fromisoformat(dt_utc[:19]).strftime('%Y%m%dT%H%M%S')
+
     # get in/out files and file objects
     p_in = Path(args.l0b_file)
     out_path = Path(args.out_path)
     if args.prod_name is None:
-        suffix = '_OneTap_DBF.h5'
+        utc_first = utc2filename(start_dt_utc)
+        utc_last = utc2filename(end_dt_utc)
+        suffix = f'_OneTap_DBF_{utc_first}_{utc_last}.h5'
         file_out = p_in.stem + suffix
     else:
         file_out = args.prod_name
