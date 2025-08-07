@@ -8,16 +8,18 @@ import iscetest
 
 
 @pytest.mark.parametrize(
-    "no_rgcomp,calib,plot,prod_name,rx_antpat_calib,max_p2p_ant",
+    ("no_rgcomp,calib,plot,prod_name,rx_antpat_calib,max_p2p_ant,"
+     "start_pulse,num_pulses_max"),
     [
-        (True, False, False, "dm2_seamed.h5", False, None),
-        (True, False, False, "dm2_seamed_antpat_calib.h5", True, None),
-        (False, True, True, None, True, 6.0)
+        (True, False, False, "dm2_seamed.h5", False, None, 15, 1000),
+        (True, False, False, "dm2_seamed_antpat_calib.h5", True, None, 5, 35),
+        (False, True, True, None, True, 6.0, 1, None)
     ],
     ids=["seamed", "seamed_antcal", "seamless"]
 )
 def test_nisar_l0b_dm2_to_dbf(
-        no_rgcomp, calib, plot, prod_name, rx_antpat_calib, max_p2p_ant):
+        no_rgcomp, calib, plot, prod_name, rx_antpat_calib,
+        max_p2p_ant, start_pulse, num_pulses_max):
     # sub directory for all test files under "isce3/tests/data"
     sub_dir = 'dm1_dm2'
     # Simulated single-pol single-band NISAR-like DM2 L0B product
@@ -53,6 +55,8 @@ def test_nisar_l0b_dm2_to_dbf(
         sample_delays=11 * [0],
         sample_delays2=None,
         rx_antpat_calib=rx_antpat_calib,
-        max_p2p_ant=max_p2p_ant
+        max_p2p_ant=max_p2p_ant,
+        start_pulse=start_pulse,
+        num_pulses_max=num_pulses_max
     )
     nisar_l0b_dm2_to_dbf(args)
