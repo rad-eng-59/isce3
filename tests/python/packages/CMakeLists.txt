@@ -35,7 +35,7 @@ nisar/mixed_mode/logic.py
 nisar/mixed_mode/processing.py
 nisar/noise/noise_estimation_from_raw.py
 nisar/pointing/doppler_lut_from_raw.py
-#nisar/pointing/el_null_range_from_raw_ant.py
+nisar/pointing/el_null_range_from_raw_ant.py
 nisar/products/granule_id.py
 nisar/products/readers/antenna_parser.py
 nisar/products/readers/attitude.py
@@ -55,7 +55,7 @@ nisar/workflows/stage_dem.py
 nisar/workflows/gcov.py
 nisar/workflows/geo2rdr.py
 nisar/workflows/geocode_insar.py
-#nisar/workflows/gen_el_null_range_product.py
+nisar/workflows/gen_el_null_range_product.py
 nisar/workflows/gen_el_rising_edge_product.py
 nisar/workflows/gslc.py
 nisar/workflows/gslc_point_target_analysis.py
