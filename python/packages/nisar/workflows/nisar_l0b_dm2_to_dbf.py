@@ -406,8 +406,8 @@ def cmd_line_parser():
                      help=('Max number of pulses, >=1, starting from '
                            '`start-pulse` to be processed. Default is all.')
                      )
-    prs.add_argument('--start-pulse', type=int, default=1,
-                     help='Start pulse number, >=1, to be processed.'
+    prs.add_argument('--start-pulse', type=int, default=0,
+                     help='Start pulse 0-based index, >=0, to be processed.'
                      )
     return prs.parse_args()
 
@@ -484,11 +484,12 @@ def nisar_l0b_dm2_to_dbf(args):
     logger.info(f'Total available number of pulses in L0B -> {n_rgl_tot}')
     # Get start and end pulse index of input product to be processed
     # expect at least 1 pulse!
-    if args.start_pulse >= n_rgl_tot:
+    if args.start_pulse < 0 or args.start_pulse >= (n_rgl_tot - 1):
         raise ValueError(
-            f'Start pulse {args.start_pulse} must be less than {n_rgl_tot}!'
+            f'Start pulse {args.start_pulse} must be a non-negative value '
+            f'less than {n_rgl_tot - 1}!'
         )
-    start_pulse_idx = args.start_pulse - 1
+    start_pulse_idx = args.start_pulse
     num_pulses = n_rgl_tot - start_pulse_idx
     # get number of pulses to be processed
     if args.num_pulses_max is not None:

@@ -11,9 +11,9 @@ import iscetest
     ("no_rgcomp,calib,plot,prod_name,rx_antpat_calib,max_p2p_ant,"
      "start_pulse,num_pulses_max"),
     [
-        (True, False, False, "dm2_seamed.h5", False, None, 15, 1000),
+        (True, False, False, "dm2_seamed.h5", False, None, 14, 1000),
         (True, False, False, "dm2_seamed_antpat_calib.h5", True, None, 5, 35),
-        (False, True, True, None, True, 6.0, 1, None)
+        (False, True, True, None, True, 6.0, 0, None)
     ],
     ids=["seamed", "seamed_antcal", "seamless"]
 )
