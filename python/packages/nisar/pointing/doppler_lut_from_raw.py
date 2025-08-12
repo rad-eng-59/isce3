@@ -21,7 +21,7 @@ from nisar.log import set_logger
 def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
                          orbit=None, attitude=None, ant=None,
                          dem=None, num_rgb_avg=8, az_block_dur=4.0,
-                         rangeline_slice=None, time_interval=2.0,
+                         rangeline_limit=None, time_interval=2.0,
                          dop_method='CDE', subband=False,
                          polyfit_deg=3, polyfit=False, exclude_beams=None,
                          out_path='.', plot=False, logger=None):
@@ -78,8 +78,8 @@ def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
     az_block_dur : float, default=4.0
         Azimuth block duration in seconds defining time-domain correlator
         length used in Doppler estimator.
-    rangeline_slice : slice, optional
-        0-based range line [start, stop] slice to limit echo range lines to
+    rangeline_limit : tuple[int | None, int | None], optional
+        0-based range line [start, stop] indices to limit echo range lines to
         be processed. Default is all range lines. The start/stop will be
         limited to within [0, total rangelines]!
     time_interval : float, default=2.0
@@ -424,14 +424,14 @@ def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
 
     # set range line slice of echo
     rgl_start_stop = [0, tot_pulses]
-    if rangeline_slice is not None:
-        if rangeline_slice.start is not None:
+    if rangeline_limit is not None:
+        if rangeline_limit[0] is not None:
             rgl_start_stop[0] = min(
-                max(rangeline_slice.start, 0),
+                max(rangeline_limit[0], 0),
                 tot_pulses - 1)
-        if rangeline_slice.stop is not None:
+        if rangeline_limit[1] is not None:
             rgl_start_stop[1] = max(
-                min(rangeline_slice.stop, tot_pulses),
+                min(rangeline_limit[1], tot_pulses),
                 rgl_start_stop[0] + 1)
     logger.info('[start, stop] range line index to be processed -> '
                 f'{rgl_start_stop}')

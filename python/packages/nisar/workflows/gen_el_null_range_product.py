@@ -239,7 +239,7 @@ def gen_el_null_range_product(args):
     idx_stop = np.searchsorted(tm_rel, t_end, side='right')
     logger.info('Range line (start, stop) 0-based indices of echo to be '
                 f'processed -> ({idx_start}, {idx_stop})')
-    rangeline_slice = slice(idx_start, idx_stop)
+    rangeline_limit = (idx_start, idx_stop)
 
     # check whether there are more than one frequency band
     # when "sample_delays2" is provided.
@@ -285,7 +285,7 @@ def gen_el_null_range_product(args):
                  orbit=orbit, attitude=attitude, freq_band=freq_band,
                  txrx_pol=txrx_pol, sample_delays_wrt_left=sample_delays,
                  imbalances_right2left=rx_imbalances,
-                 rangeline_slice=rangeline_slice, **kwargs
+                 rangeline_limit=rangeline_limit, **kwargs
             )
             # check the excluded nulls whose quality factor will be zeroed out
             list_nulls = np.unique(null_num)

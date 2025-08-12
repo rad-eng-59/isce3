@@ -202,7 +202,7 @@ def gen_doppler_range_product(args):
     idx_stop = np.searchsorted(tm_rel, t_end, side='right')
     logger.info('Range line (start, stop) 0-based indices of echo to be '
                 f'processed -> ({idx_start}, {idx_stop})')
-    rangeline_slice = slice(idx_start, idx_stop)
+    rangeline_limit = (idx_start, idx_stop)
 
     # build orbit and attitude object if external files are provided
     if args.orbit_file is None:
@@ -253,7 +253,7 @@ def gen_doppler_range_product(args):
                 doppler_lut_from_raw(raw_obj, orbit=orbit, attitude=attitude,
                                      ant=ant, dem=dem, logger=logger,
                                      freq_band=freq_band, txrx_pol=txrx_pol,
-                                     rangeline_slice=rangeline_slice, **kwargs
+                                     rangeline_limit=rangeline_limit, **kwargs
                                      )
 
             # check out antenna object to extract azimuth angle for EL cuts

@@ -24,7 +24,7 @@ from nisar.antenna import TxTrmInfo, compute_transmit_pattern_weights
 def el_rising_edge_from_raw_ant(raw, ant, *, dem_interp=None,
                                 freq_band='A', txrx_pol=None,
                                 orbit=None, attitude=None, az_block_dur=3.0,
-                                rangeline_slice=None, beam_num=None,
+                                rangeline_limit=None, beam_num=None,
                                 dbf_pow_norm=True, apply_weight=True,
                                 plot=False, out_path='.', logger=None):
     """
@@ -63,8 +63,8 @@ def el_rising_edge_from_raw_ant(raw, ant, *, dem_interp=None,
         duration of echo if it is too large.
         The min block duration must be equal or larger than nominal mean
         PRI (pulse repetition interval).
-    rangeline_slice : slice, optional
-        0-based range line [start, stop] slice to limit echo range lines to
+    rangeline_limit : tuple[int | None, int | None], optional
+        0-based range line [start, stop] indices to limit echo range lines to
         be processed. Default is all range lines. The start/stop will be
         limited to within [0, total rangelines]!
     beam_num : int, optional
@@ -232,14 +232,14 @@ def el_rising_edge_from_raw_ant(raw, ant, *, dem_interp=None,
                 f'({num_rgls_tot, num_rgbs})')
     # set range line slice of echo
     rgl_start_stop = [0, num_rgls_tot]
-    if rangeline_slice is not None:
-        if rangeline_slice.start is not None:
+    if rangeline_limit is not None:
+        if rangeline_limit[0] is not None:
             rgl_start_stop[0] = min(
-                max(rangeline_slice.start, 0),
+                max(rangeline_limit[0], 0),
                 num_rgls_tot - 1)
-        if rangeline_slice.stop is not None:
+        if rangeline_limit[1] is not None:
             rgl_start_stop[1] = max(
-                min(rangeline_slice.stop, num_rgls_tot),
+                min(rangeline_limit[1], num_rgls_tot),
                 rgl_start_stop[0] + 1)
     logger.info('(start, stop) range line index to be processed -> '
                 f'{rgl_start_stop}')

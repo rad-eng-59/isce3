@@ -197,7 +197,7 @@ def gen_el_rising_edge_product(args):
     idx_stop = np.searchsorted(tm_rel, t_end, side='right')
     logger.info('Range line (start, stop) 0-based indices of echo to be '
                 f'processed -> ({idx_start}, {idx_stop})')
-    rangeline_slice = slice(idx_start, idx_stop)
+    rangeline_limit = (idx_start, idx_stop)
 
     # get keyword args for function "el_rising_edge_from_raw_ant"
     kwargs = {key: val for key, val in vars(args).items() if
@@ -221,7 +221,7 @@ def gen_el_rising_edge_product(args):
                  attitude=attitude, logger=logger,
                  dbf_pow_norm=not args.no_dbf_norm,
                  apply_weight=not args.no_weight, freq_band=freq_band,
-                 txrx_pol=txrx_pol, rangeline_slice=rangeline_slice,
+                 txrx_pol=txrx_pol, rangeline_limit=rangeline_limit,
                  **kwargs
                  )
             # get the first and last utc azimuth time w/o fractional seconds
