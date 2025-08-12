@@ -32,6 +32,14 @@ from nisar.workflows.helpers import build_uniform_quantizer_lut_l0b, slice_gen
 from isce3.antenna import ant2rgdop
 
 
+def _join_paths(path1: str, path2: str) -> str:
+    """Join two paths to be used in HDF5"""
+    sep = '/'
+    if path1.endswith(sep):
+        sep = ''
+    return path1 + sep + path2
+
+
 def copy_swath_except_echo_h5(
         fid_in, fid_out, swath_path, frq_pol, tx_keys=None, rx_keys=None):
     """
@@ -68,7 +76,7 @@ def copy_swath_except_echo_h5(
 
     for freq_band in frq_pol:
         # build band path
-        band_path = os.path.join(swath_path, f'frequency{freq_band}/')
+        band_path = _join_paths(swath_path, f'frequency{freq_band}/')
         # create freq band group for output product
         grp_band = fid_out.require_group(band_path)
         # list of all TxRx products
@@ -142,7 +150,7 @@ def create_echo_dataset_h5(fid_in, fid_out, band_path, txrx_pol,
     in output HDF5
 
     """
-    rx_path = os.path.join(band_path, f'tx{txrx_pol[0]}/rx{txrx_pol[1]}/')
+    rx_path = _join_paths(band_path, f'tx{txrx_pol[0]}/rx{txrx_pol[1]}/')
     # create a place holder for dataset
     grp_rx = fid_out[rx_path]
     dset_prod = grp_rx.create_dataset(
@@ -186,7 +194,7 @@ def _copy_datasets_truncated(
         they exist in input hdf5.
 
     """
-    path = os.path.join(band_path, f'tx{pol[0]}/')
+    path = _join_paths(band_path, f'tx{pol[0]}/')
     if len(pol) == 2:
         path += f'rx{pol[1]}/'
     # output group
@@ -201,7 +209,7 @@ def _copy_datasets_truncated(
             )
             continue
         else:
-            data_in = dset_in[pulse_slice.start:pulse_slice.stop]
+            data_in = dset_in[pulse_slice]
             dset_out = grp_out.require_dataset(
                 name, shape=data_in.shape, dtype=data_in.dtype, data=data_in)
             # copy attributes for the product from input
@@ -280,7 +288,7 @@ def copy_tx_datasets_truncated(
     # form list of keys excluding valid subswath
     keys_new = [k for k in keys if "validSamplesSubSwath" not in k]
     # get dataset names for valid subswath and appended them to the new list
-    path = os.path.join(band_path, f'tx{tx_pol[0]}/')
+    path = _join_paths(band_path, f'tx{tx_pol[0]}/')
     num_sbsw = fid_in[path + 'numberOfSubSwaths'][()]
     for n in range(1, num_sbsw + 1):
         keys_new.append(f'validSamplesSubSwath{n}')
