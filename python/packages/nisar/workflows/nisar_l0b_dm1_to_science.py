@@ -42,7 +42,7 @@ def cmd_line_parser():
     prs.add_argument('-p', '--product-name', type=str, dest='prod_name',
                      help=('Product science L0B HDF5 file and path name. '
                            'Default is input L0B filename with suffix '
-                           '"_Science_<utc-first>_<utc-last>" added prior to '
+                           '"_SCIENCE_<utc-first>_<utc-last>" added prior to '
                            'the extension and is stored at the current '
                            'directory. First/last UTC is set by first/last '
                            'pulses to be processed.')
@@ -657,7 +657,7 @@ def nisar_l0b_dm1_to_science(args):
     if args.prod_name is None:
         utc_first = utc2filename(start_dt_utc)
         utc_last = utc2filename(end_dt_utc)
-        suffix = f'_Science_{utc_first}_{utc_last}.h5'
+        suffix = f'_SCIENCE_{utc_first}_{utc_last}.h5'
         file_out = p_in.stem + suffix
     else:
         file_out = args.prod_name
