@@ -402,12 +402,16 @@ def cmd_line_parser():
                            'pattern coverage of swath. A positive value used '
                            'only if `rx-antpat-calib`.')
                      )
-    prs.add_argument('--num-pulses-max', type=int,
-                     help=('Max number of pulses, >=1, starting from '
-                           '`start-pulse` to be processed. Default is all.')
+    prs.add_argument('--time-start', type=float, default=0,
+                     help=('Start time (seconds) wrt the first range line, '
+                           '>= 0, to be processed. This is inclusive.')
                      )
-    prs.add_argument('--start-pulse', type=int, default=0,
-                     help='Start pulse 0-based index, >=0, to be processed.'
+    prs.add_argument('--time-stop', type=float,
+                     help=('Stop time (seconds) wrt the first range line, '
+                           '> 0, to be processed. Must be larger than '
+                           '`time-start`. Its value will be limited by the '
+                           'time of the last range line. This is exclusive. '
+                           'The default is entire L0B.')
                      )
     return prs.parse_args()
 
@@ -478,31 +482,37 @@ def nisar_l0b_dm2_to_dbf(args):
                         ' averaged complex caltones!')
     else:  # No calibration, set cal amplitude to None!
         amp_cal = None
+
     # get ref epoch and build AZ slice generator
     epoch, azt_raw = raw.getPulseTimes(freq_band, txrx_pol[0])
     n_rgl_tot = azt_raw.size
     logger.info(f'Total available number of pulses in L0B -> {n_rgl_tot}')
     # Get start and end pulse index of input product to be processed
-    # expect at least 1 pulse!
-    if args.start_pulse < 0 or args.start_pulse >= (n_rgl_tot - 1):
+    # expect at least one range line to be processed!
+    # Check the start time and get its pulse index
+    azt_rel = azt_raw - azt_raw[0]
+    if (args.time_start < 0) or not (args.time_start < azt_rel[-1]):
         raise ValueError(
-            f'Start pulse {args.start_pulse} must be a non-negative value '
-            f'less than {n_rgl_tot - 1}!'
-        )
-    start_pulse_idx = args.start_pulse
-    num_pulses = n_rgl_tot - start_pulse_idx
-    # get number of pulses to be processed
-    if args.num_pulses_max is not None:
-        if args.num_pulses_max < 1:
-            raise ValueError(
-                f'Max number of pulses {args.num_pulses_max} must be >=1!'
-            )
-        num_pulses = min(args.num_pulses_max,  num_pulses)
-    stop_pulse_idx = start_pulse_idx + num_pulses
-    logger.info(f'Number of pulses for output L0B -> {num_pulses}')
+            f'"time-start" shall be within [0, {azt_rel[-1]}) (sec)!')
+    # start time is inclusive!
+    start_pulse_idx = np.searchsorted(
+        azt_rel, args.time_start, side='right') - 1
+    # Check the stop time and get its pulse index
+    if args.time_stop is None:
+        stop_pulse_idx = n_rgl_tot
+    else:
+        if args.time_stop < azt_rel[start_pulse_idx + 1]:
+            raise ValueError('"time-stop" shall be equal or larger than '
+                             f'{azt_rel[start_pulse_idx + 1]} (sec)')
+        # stop time is exclusive!
+        stop_pulse_idx = np.searchsorted(
+            azt_rel, args.time_stop, side='left') - 1
     logger.info('(start, stop) 0-based pulse index to be processed -> '
                 f'({start_pulse_idx}, {stop_pulse_idx})')
     pulse_slice = slice(start_pulse_idx, stop_pulse_idx)
+    # get number of pulses to be processed
+    num_pulses = stop_pulse_idx - start_pulse_idx
+    logger.info(f'Number of pulses for output L0B -> {num_pulses}')
     # Get start and end UTC datetime for output L0B products
     start_dt_utc = (epoch + TimeDelta(azt_raw[start_pulse_idx])).isoformat()
     end_dt_utc = (epoch + TimeDelta(azt_raw[stop_pulse_idx - 1])).isoformat()
@@ -794,6 +804,7 @@ def nisar_l0b_dm2_to_dbf(args):
             for n_blk, (rgl_slice, rgl_slice_o) in enumerate(
                     zip(rgl_slices, rgl_slices_out), start=1):
                 logger.info(f'Processing AZ block # {n_blk} ...')
+                logger.info(f'Processing input rangelines -> {rgl_slice}')
                 num_rgl = rgl_slice.stop - rgl_slice.start
                 # fill in 3-D memmap complex array with decoded echo,
                 # one channel at a time to avoid memory issue!
