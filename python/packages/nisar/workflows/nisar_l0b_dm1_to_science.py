@@ -603,6 +603,8 @@ def nisar_l0b_dm1_to_science(args):
 
     # get ref epoch and build AZ slice generator
     epoch, azt_raw = raw.getPulseTimes(freq_band_in, txrx_pol[0])
+    n_rgl_tot = azt_raw.size
+    logger.info(f'Total available number of pulses in L0B -> {n_rgl_tot}')
 
     # Get start and end pulse index of input product to be processed
     # expect at least one range line to be processed!
@@ -611,17 +613,19 @@ def nisar_l0b_dm1_to_science(args):
     if (args.time_start < 0) or not (args.time_start < azt_rel[-1]):
         raise ValueError(
             f'"time-start" shall be within [0, {azt_rel[-1]}) (sec)!')
+    # start time is inclusive!
     start_pulse_idx = np.searchsorted(
         azt_rel, args.time_start, side='right') - 1
     # Check the stop time and get its pulse index
     if args.time_stop is None:
-        stop_pulse_idx = azt_rel.size
+        stop_pulse_idx = n_rgl_tot
     else:
         if args.time_stop < azt_rel[start_pulse_idx + 1]:
             raise ValueError('"time-stop" shall be equal or larger than '
                              f'{azt_rel[start_pulse_idx + 1]} (sec)')
+        # stop time is exclusive!
         stop_pulse_idx = np.searchsorted(
-            azt_rel, args.time_stop, side='right')
+            azt_rel, args.time_stop, side='left') - 1
     logger.info('(start, stop) 0-based pulse index to be processed -> '
                 f'({start_pulse_idx}, {stop_pulse_idx})')
     pulse_slice = slice(start_pulse_idx, stop_pulse_idx)
