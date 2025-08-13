@@ -9,17 +9,17 @@ import iscetest
 
 @pytest.mark.parametrize(
     ("no_rgcomp,calib,plot,prod_name,rx_antpat_calib,max_p2p_ant,"
-     "start_pulse,num_pulses_max"),
+     "time_start,time_stop"),
     [
-        (True, False, False, "dm2_seamed.h5", False, None, 14, 1000),
-        (True, False, False, "dm2_seamed_antpat_calib.h5", True, None, 5, 35),
+        (True, False, False, "dm2_seamed.h5", False, None, 0.01, 1.0),
+        (True, False, False, "dm2_seamed_antpat_calib.h5", True, None, 0.005, 0.03),
         (False, True, True, None, True, 6.0, 0, None)
     ],
     ids=["seamed", "seamed_antcal", "seamless"]
 )
 def test_nisar_l0b_dm2_to_dbf(
         no_rgcomp, calib, plot, prod_name, rx_antpat_calib,
-        max_p2p_ant, start_pulse, num_pulses_max):
+        max_p2p_ant, time_start, time_stop):
     # sub directory for all test files under "isce3/tests/data"
     sub_dir = 'dm1_dm2'
     # Simulated single-pol single-band NISAR-like DM2 L0B product
@@ -56,7 +56,7 @@ def test_nisar_l0b_dm2_to_dbf(
         sample_delays2=None,
         rx_antpat_calib=rx_antpat_calib,
         max_p2p_ant=max_p2p_ant,
-        start_pulse=start_pulse,
-        num_pulses_max=num_pulses_max
+        time_start=time_start,
+        time_stop=time_stop
     )
     nisar_l0b_dm2_to_dbf(args)
