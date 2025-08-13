@@ -8,15 +8,15 @@ import iscetest
 
 
 @pytest.mark.parametrize(
-    "prod_name,ovsf_rg,plot,num_cpu,start_pulse,num_pulses_max",
+    "prod_name,ovsf_rg,plot,num_cpu,time_start,time_stop",
     [
         (None, None, False, None, 0, None),
-        ('dm1.h5', 1.2, True, 4, 11, 30)
+        ('dm1.h5', 1.2, True, 4, 0.01, 0.5)
     ],
     ids=["default", "non-default"]
 )
 def test_nisar_l0b_dm1_to_science(
-        prod_name, ovsf_rg, plot, num_cpu, start_pulse, num_pulses_max):
+        prod_name, ovsf_rg, plot, num_cpu, time_start, time_stop):
     # sub directory for all test files under "isce3/tests/data"
     sub_dir = 'dm1_dm2'
     # Simulated single-pol single-band NISAR-like DM1 L0B product
@@ -37,7 +37,7 @@ def test_nisar_l0b_dm1_to_science(
         ovsf_rg=ovsf_rg,
         sign_mag=False,
         nbits=12,
-        start_pulse=start_pulse,
-        num_pulses_max=num_pulses_max
+        time_start=time_start,
+        time_stop=time_stop
     )
     nisar_l0b_dm1_to_science(args)
