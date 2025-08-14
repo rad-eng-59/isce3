@@ -1,9 +1,12 @@
 import os
+import pathlib
 
+import isce3
 import numpy as np
 from isce3.core import LUT2d
 from isce3.product import get_radar_grid_nominal_ground_spacing
 from nisar.workflows import geo2rdr, rdr2geo
+from nisar.workflows.compute_stats import compute_stats_real_hdf5_dataset
 from nisar.workflows.h5_prep import add_geolocation_grid_cubes_to_hdf5
 from nisar.workflows.helpers import (get_cfg_freq_pols, get_offset_radar_grid,
                                      get_pixel_offsets_dataset_shape,
@@ -13,8 +16,9 @@ from .dataset_params import DatasetParams, add_dataset_and_attrs
 from .InSAR_base_writer import InSARBaseWriter
 from .product_paths import L1GroupsPaths
 from .units import Units
-from .utils import (extract_datetime_from_string, generate_insar_subswath_mask,
-                    get_geolocation_grid_cube_obj)
+from .utils import (extract_datetime_from_string, generate_dem_rdr,
+                    generate_insar_subswath_mask,
+                    get_geolocation_grid_cube_obj, save_to_hdf5_ds)
 
 
 class L1InSARWriter(InSARBaseWriter):
@@ -450,12 +454,41 @@ class L1InSARWriter(InSARBaseWriter):
                                                  " projecting them onto a range/Doppler grid"),
                                     units=Units.meter)
 
-            # temporarily add stats attributes to the 'digitalElevationModel' dataset
-            # TODO: remove this placeholder for setting stats values
-            # to 0.0 once the actual values are being computed.
-            for attr in ['mean_value', 'min_value',
-                         'max_value', 'sample_stddev']:
-                offset_group['digitalElevationModel'].attrs[attr] = 0.0
+            if self.dem_file is not None:
+                threshold = self.cfg['processing']['rdr2geo']['threshold']
+                numiter = self.cfg['processing']['rdr2geo']['numiter']
+                extraiter = self.cfg['processing']['rdr2geo']['extraiter']
+                lines_per_block = self.cfg['processing']['rdr2geo']['lines_per_block']
+
+                scratch_path = pathlib.Path(self.cfg['product_path_group']['scratch_path'])
+                # create seperate directory within scratch dir for rdr2geo run
+                rdr2geo_scratch_path = scratch_path / 'rdr2geo' / f'freq{freq}'
+                rdr2geo_scratch_path.mkdir(parents=True, exist_ok=True)
+                out_dem_rdr_path = rdr2geo_scratch_path / f'{self.product_info.ProductType}_offsets_dem.rdr'
+
+                # check if gpu ok to use
+                use_gpu = isce3.core.gpu_check.use_gpu(self.cfg['worker']['gpu_enabled'],
+                                                       self.cfg['worker']['gpu_id'])
+                if use_gpu:
+                    # Set the current CUDA device.
+                    device = isce3.cuda.core.Device(self.cfg['worker']['gpu_id'])
+                    isce3.cuda.core.set_device(device)
+
+                generate_dem_rdr(off_radargrid, self.ref_orbit, self.dem_file,
+                                 out_dem_rdr_path=str(out_dem_rdr_path),
+                                 use_gpu=use_gpu,threshold=threshold,
+                                 numiter=numiter,
+                                 extraiter=extraiter,
+                                 lines_per_block=lines_per_block)
+                save_to_hdf5_ds(str(out_dem_rdr_path),
+                                offset_group['digitalElevationModel'],
+                                lines_per_block)
+                # Compute the stats
+                compute_stats_real_hdf5_dataset(offset_group['digitalElevationModel'])
+            else:
+                for attr in ['mean_value', 'min_value',
+                            'max_value', 'sample_stddev']:
+                    offset_group['digitalElevationModel'].attrs[attr] = 0.0
 
             # add the subswath mask layer to the pixel offset group
             self._create_2d_dataset(offset_group,
@@ -469,7 +502,7 @@ class L1InSARWriter(InSARBaseWriter):
                                                  " subswath number of that pixel in the secondary RSLC,"
                                                  " and the most significant digit represents"
                                                  " the subswath number of that pixel in the reference RSLC."
-                                                 " A value of '0' in either digit indicates an invalid sample"
+                                                 " A value of 0 in either digit indicates an invalid sample"
                                                  " in the corresponding RSLC"),
                                     fill_value=255)
             offset_group['mask'].attrs['long_name'] = np.bytes_("Valid samples subswath mask")
@@ -636,12 +669,41 @@ class L1InSARWriter(InSARBaseWriter):
                                                  " projecting them onto a range/Doppler grid"),
                                     units=Units.meter)
 
-            # temporarily add stats attributes to the 'digitalElevationModel' dataset
-            # TODO: remove this placeholder for setting stats values
-            # to 0.0 once the actual values are being computed.
-            for attr in ['mean_value', 'min_value',
-                         'max_value', 'sample_stddev']:
-                igram_group['digitalElevationModel'].attrs[attr] = 0.0
+            if self.dem_file is not None:
+                threshold = self.cfg['processing']['rdr2geo']['threshold']
+                numiter = self.cfg['processing']['rdr2geo']['numiter']
+                extraiter = self.cfg['processing']['rdr2geo']['extraiter']
+                lines_per_block = self.cfg['processing']['rdr2geo']['lines_per_block']
+
+                scratch_path = pathlib.Path(self.cfg['product_path_group']['scratch_path'])
+                # create seperate directory within scratch dir for rdr2geo run
+                rdr2geo_scratch_path = scratch_path / 'rdr2geo' / f'freq{freq}'
+                rdr2geo_scratch_path.mkdir(parents=True, exist_ok=True)
+                out_dem_rdr_path = rdr2geo_scratch_path / f'{self.product_info.ProductType}_ifgram_dem.rdr'
+
+                # check if gpu ok to use
+                use_gpu = isce3.core.gpu_check.use_gpu(self.cfg['worker']['gpu_enabled'],
+                                                       self.cfg['worker']['gpu_id'])
+                if use_gpu:
+                    # Set the current CUDA device.
+                    device = isce3.cuda.core.Device(self.cfg['worker']['gpu_id'])
+                    isce3.cuda.core.set_device(device)
+
+                generate_dem_rdr(igram_radargrid, self.ref_orbit, self.dem_file,
+                                 out_dem_rdr_path=str(out_dem_rdr_path),
+                                 use_gpu=use_gpu, threshold=threshold,
+                                 numiter=numiter,
+                                 extraiter=extraiter,
+                                 lines_per_block=lines_per_block)
+                save_to_hdf5_ds(str(out_dem_rdr_path),
+                                igram_group['digitalElevationModel'],
+                                lines_per_block)
+                # Compute the stats
+                compute_stats_real_hdf5_dataset(igram_group['digitalElevationModel'])
+            else:
+                for attr in ['mean_value', 'min_value',
+                            'max_value', 'sample_stddev']:
+                    igram_group['digitalElevationModel'].attrs[attr] = 0.0
 
             # add the subswath mask layer to the interferogram group
             self._create_2d_dataset(igram_group,
