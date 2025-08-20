@@ -27,10 +27,14 @@ runconfig:
             # REQUIRED - Digital elevation model
             dem_file:
 
-            # PLACEHOLDER - Digital elevation model file description, optional
+            # Digital elevation model file description, optional
             dem_file_description:
 
             water_mask_file:
+
+            # Water mask file description, optional
+            water_mask_file_description:
+
             orbit_files:
                 reference_orbit_file:
                 secondary_orbit_file:
