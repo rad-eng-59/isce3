@@ -221,7 +221,7 @@ def gen_el_null_range_product(args):
     # determine [start, stop] range lines of echo to be processed.
     freq_band = list(frq_pol.keys())[0]
     txrx_pol = frq_pol[freq_band][0]
-    epoch, tm = raw_obj.getPulseTimes(freq_band, txrx_pol[0])
+    _, tm = raw_obj.getPulseTimes(freq_band, txrx_pol[0])
     tm_rel = tm - tm[0]
     t_start = args.time_start
     if t_start < 0 or t_start > tm_rel[-2]:

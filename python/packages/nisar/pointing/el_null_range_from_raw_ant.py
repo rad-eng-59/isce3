@@ -100,9 +100,9 @@ def el_null_range_from_raw_ant(
         The min block duration must be equal or larger than nominal mean
         PRI (pulse repetition interval).
     rangeline_limit : tuple[int | None, int | None], optional
-        0-based range line [start, stop] indices to limit echo range lines to
+        0-based range line [start, stop) indices to limit echo range lines to
         be processed. Default is all range lines. The start/stop will be
-        limited to within [0, total rangelines]!
+        limited to within [0, total rangelines)!
     apply_caltone : bool, default=False
         Apply caltone coefficients to RX channels prior to Null formation.
     imbalances_right2left : sequence or array of complex float, optional
@@ -245,7 +245,7 @@ def el_null_range_from_raw_ant(
             rgl_start_stop[1] = max(
                 min(rangeline_limit[1], num_rgls_tot),
                 rgl_start_stop[0] + 1)
-    logger.info('[start, stop] range line index to be processed -> '
+    logger.info('[start, stop) range line index to be processed -> '
                 f'{rgl_start_stop}')
     # update number of range lines to be processed
     num_rgls = rgl_start_stop[1] - rgl_start_stop[0]

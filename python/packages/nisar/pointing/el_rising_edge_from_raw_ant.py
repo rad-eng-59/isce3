@@ -64,9 +64,9 @@ def el_rising_edge_from_raw_ant(raw, ant, *, dem_interp=None,
         The min block duration must be equal or larger than nominal mean
         PRI (pulse repetition interval).
     rangeline_limit : tuple[int | None, int | None], optional
-        0-based range line [start, stop] indices to limit echo range lines to
+        0-based range line [start, stop) indices to limit echo range lines to
         be processed. Default is all range lines. The start/stop will be
-        limited to within [0, total rangelines]!
+        limited to within [0, total rangelines)!
     beam_num : int, optional
         Beam number used for fetching a desired beam from antenna object simply
         for single-channel raw echo. It will be ignored for SweepSAR case!

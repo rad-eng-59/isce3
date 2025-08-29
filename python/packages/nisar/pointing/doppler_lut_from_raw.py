@@ -79,9 +79,9 @@ def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
         Azimuth block duration in seconds defining time-domain correlator
         length used in Doppler estimator.
     rangeline_limit : tuple[int | None, int | None], optional
-        0-based range line [start, stop] indices to limit echo range lines to
+        0-based range line [start, stop) indices to limit echo range lines to
         be processed. Default is all range lines. The start/stop will be
-        limited to within [0, total rangelines]!
+        limited to within [0, total rangelines)!
     time_interval : float, default=2.0
         Time stamp interval between azimuth blocks in seconds.
         It should not be larger than "az_block_dur".
@@ -433,7 +433,7 @@ def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
             rgl_start_stop[1] = max(
                 min(rangeline_limit[1], tot_pulses),
                 rgl_start_stop[0] + 1)
-    logger.info('[start, stop] range line index to be processed -> '
+    logger.info('[start, stop) range line index to be processed -> '
                 f'{rgl_start_stop}')
     # update number of range lines to be processed
     num_rgls = rgl_start_stop[1] - rgl_start_stop[0]
