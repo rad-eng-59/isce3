@@ -8,6 +8,7 @@ from collections.abc import Iterator
 
 import numpy as np
 from scipy.interpolate import PchipInterpolator
+from scipy import stats
 import h5py
 
 from isce3.noise import noise_pow_min_var_est, noise_pow_min_eigval_est
@@ -218,9 +219,12 @@ def extract_noise_only_lines(raw, freq_band, txrx_pol, max_lines=18944):
                 # lacks any noise-only range line!
                 yield dset[noise_index], noise_index
             else:
-                # XXX Use last value to check for RCID given the delay
-                # in updating low-rate telemetry (DRT) for NISAR!
-                if rcids[-1] in rcid_special:
+                # XXX Use mid, last, most counted value to check for RCID
+                # given delay in updating low-rate telemetry (DRT) for NISAR!
+                rcid_mode = stats.mode(rcids).mode
+                if (rcids[-1] in rcid_special or
+                    rcids[len(rcids) // 2] in rcid_special or
+                        rcid_mode in rcid_special):
                     if max_lines < 3:
                         warn(f'Max number of noise-only lines {max_lines} is '
                              'too short! The results may be biased!')
@@ -887,7 +891,7 @@ def _noise_product_rng_blocks(
                 if cpi > MAX_CPI_LEN:
                     logger.warning(
                         f'Too large CPI value! It exceeds max {MAX_CPI_LEN}!'
-                        )
+                    )
             logger.info(f'MEE CPI size -> {cpi}')
             pow_noise[nn] = noise_pow_min_eigval_est(
                 noise_rng_blk[idx_valid], cpi, scalar=scalar,
