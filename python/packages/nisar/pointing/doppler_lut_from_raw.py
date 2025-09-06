@@ -518,6 +518,10 @@ def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
                     )
         else:  # single channel
             echo = raw_dset[slice_line]
+        # Remove DC in AZ to mitigate internal cal signals such as
+        # Caltone and its intermods that can largely bias Doppler
+        # centroid est.
+        echo -= np.nanmean(echo, axis=0)
 
         # create a mask for invalid/bad range bins for any reason
         # invalid values are either nan or zero but this does not include
