@@ -2,6 +2,7 @@
 Function to generate Doppler LUT2d from Raw L0B data.
 """
 import os
+from collections.abc import Iterator
 import numpy as np
 from scipy import fft
 try:
@@ -24,6 +25,7 @@ def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
                          rangeline_limit=None, time_interval=2.0,
                          dop_method='CDE', subband=False,
                          polyfit_deg=3, polyfit=False, exclude_beams=None,
+                         duration_dc_remove_az=0.5,
                          out_path='.', plot=False, logger=None):
     """Generates 2-D Doppler LUT as a function of slant range and azimuth time.
 
@@ -111,6 +113,10 @@ def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
         The beam number is in the range [1, N], where N is the number
         of beams or RX channels. By default, all beams are included
         in the polyfitting of Doppler over entire swath of DM2 products.
+    duration_dc_remove_az: float or None, default=0.5
+        Max AZ-block duration in (seconds) to remove DC in order to mitigate
+        internal calibration signal such as Caltone that can bias Doppler
+        estimation. If None, no DC removal in AZ.
     out_path : str, default='.'
         Output directory for dumping PNG files, if `plot` is True.
     plot : bool, default=False
@@ -238,6 +244,11 @@ def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
     logger.info(f'Chirp pulsewidth -> {pulsewidth * 1e6:.2f} (us)')
     logger.info(f'Chirp center frequency -> {centerfreq * 1e-6:.2f} (MHz)')
     logger.info(f'PRF -> {prf:.3f} (Hz)')
+
+    if duration_dc_remove_az is not None:
+        nrgl_dc_rm = int(prf * duration_dc_remove_az)
+        logger.info('Number range lines used in AZ-blocked '
+                    f'DC removal -> {nrgl_dc_rm}')
 
     # Get raw dataset
     raw_dset = raw.getRawDataset(freq_band, txrx_pol)
@@ -521,7 +532,9 @@ def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
         # Remove DC in AZ to mitigate internal cal signals such as
         # Caltone and its intermods that can largely bias Doppler
         # centroid est.
-        echo -= np.nanmean(echo, axis=0)
+        if duration_dc_remove_az is not None:
+            for slice_rm_dc in _slice_gen(num_lines, nrgl_dc_rm):
+                echo[slice_rm_dc] -= np.nanmean(echo[slice_rm_dc], axis=0)
 
         # create a mask for invalid/bad range bins for any reason
         # invalid values are either nan or zero but this does not include
@@ -919,3 +932,33 @@ def _form_mask_valid_range(tot_rgbs, rgb_valid_sbsw):
     for start_stop in rgb_valid_sbsw:
         msk_valid_rg[slice(*start_stop)] = True
     return msk_valid_rg
+
+
+def _slice_gen(
+        n_smp: int, n_smp_blk: int, idx_start: int = 0) -> Iterator[slice]:
+    """slice generator.
+
+    Parameters
+    ----------
+    n_smp : int
+        Total number of samples
+    n_smp_blk : int
+        Number of samples per full block
+    idx_start : int, default=0
+        Start index
+
+    Yields
+    ------
+    slice
+        slice object for each block.
+        The last block can have more
+        number of samples than `n_smp_blk`!
+
+    """
+    n_blk = n_smp // n_smp_blk
+    i_start = idx_start
+    for n in range(n_blk - 1):
+        i_stop = i_start + n_smp_blk
+        yield slice(i_start, i_stop)
+        i_start = i_stop
+    yield slice(i_start, idx_start + n_smp)
