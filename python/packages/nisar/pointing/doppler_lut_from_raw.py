@@ -249,6 +249,8 @@ def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
         nrgl_dc_rm = int(prf * duration_dc_remove_az)
         logger.info('Number range lines used in AZ-blocked '
                     f'DC removal -> {nrgl_dc_rm}')
+    else:
+        logger.warning('No blocked DC removal in AZ!')
 
     # Get raw dataset
     raw_dset = raw.getRawDataset(freq_band, txrx_pol)

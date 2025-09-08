@@ -124,6 +124,11 @@ def cmd_line_parser():
                            'Default is entire L0B duration starting from '
                            '`time-start`.')
                      )
+    prs.add_argument('--duration-dc-remove-az', type=float, default=0.5,
+                     help=('Time duration (seconds) of AZ blocks for DC '
+                           'removal in AZ in order to mitigate Caltone and '
+                           'internal signal biasing Doppler Est. ')
+                     )
     return prs.parse_args()
 
 
