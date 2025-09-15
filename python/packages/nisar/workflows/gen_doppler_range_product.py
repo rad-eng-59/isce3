@@ -127,7 +127,10 @@ def cmd_line_parser():
     prs.add_argument('--duration-dc-remove-az', type=float, default=0.5,
                      help=('Time duration (seconds) of AZ blocks for DC '
                            'removal in AZ in order to mitigate Caltone and '
-                           'internal signal biasing Doppler Est. ')
+                           'internal signal biasing Doppler Est. Must be a '
+                           'positive value not greater than `az_block_dur`! '
+                           'Its value may be modified to make it an integer '
+                           'fraction of `az_block_dur`.')
                      )
     return prs.parse_args()
 

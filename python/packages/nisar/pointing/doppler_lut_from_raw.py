@@ -114,9 +114,11 @@ def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
         of beams or RX channels. By default, all beams are included
         in the polyfitting of Doppler over entire swath of DM2 products.
     duration_dc_remove_az: float or None, default=0.5
-        Max AZ-block duration in (seconds) to remove DC in order to mitigate
-        internal calibration signal such as Caltone that can bias Doppler
-        estimation. If None, no DC removal in AZ.
+        Approximate AZ-block duration in (seconds) to remove DC in order to
+        mitigate internal calibration signal such as Caltone that can bias
+        Doppler estimation. Must be a positive value not greater than
+        `az_block_dur`! Its value may be modified to make it an integer
+        fraction of `az_block_dur`! If None, no DC removal in AZ.
     out_path : str, default='.'
         Output directory for dumping PNG files, if `plot` is True.
     plot : bool, default=False
@@ -246,7 +248,24 @@ def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
     logger.info(f'PRF -> {prf:.3f} (Hz)')
 
     if duration_dc_remove_az is not None:
-        nrgl_dc_rm = int(prf * duration_dc_remove_az)
+        # check allowable min/max value for AZ DC removal duration.
+        if (not (duration_dc_remove_az > 0.0) or
+                duration_dc_remove_az > az_block_dur):
+            raise ValueError(
+                f'"duration_dc_remove_az" {duration_dc_remove_az} (sec) must '
+                'be a positive value not greater than "az_block_dur" '
+                f'{az_block_dur} (sec)!'
+            )
+        # Now force DC-removal duration to be an integer
+        # fraction of Doppler duration
+        n_ratio = round(az_block_dur / duration_dc_remove_az)
+        dur_dc_rm_az_new = az_block_dur / n_ratio
+        logger.warning(
+            'To force "duration_dc_remove_az" to be an integer fraction of '
+            f'"az_block_dur" {az_block_dur} (sec), it is modified from '
+            f'{duration_dc_remove_az} (sec) to {dur_dc_rm_az_new} (sec)!'
+        )
+        nrgl_dc_rm = int(prf * dur_dc_rm_az_new)
         logger.info('Number range lines used in AZ-blocked '
                     f'DC removal -> {nrgl_dc_rm}')
     else:

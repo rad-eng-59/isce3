@@ -245,7 +245,7 @@ class TestDopplerLutFromRaw:
         dop_lut, _, _, _, _, _, _ = doppler_lut_from_raw(
             self.raw_obj, az_block_dur=self.az_block_dur,
             time_interval=self.time_interval, polyfit=True,
-            duration_dc_remove_az=1.0)
+            duration_dc_remove_az=0.7)
         # validate Doppler LUT axes, shape, statistics
         self._validate_doppler_lut(
             dop_lut, num_rgb_avg=8,
