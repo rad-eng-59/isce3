@@ -74,11 +74,11 @@ def cmd_line_parser():
                      help='Number of range bins to be averaged in Doppler '
                      'Estimator block. Shall be equal or larger than 1.')
     prs.add_argument('-a', '--az_block_dur', type=float, dest='az_block_dur',
-                     default=4.0,
+                     default=10.0,
                      help='Azimuth block duration in seconds defining time-'
                      'domain correlator length used in Doppler estimator.')
     prs.add_argument('-t', '--time_interval', type=float, dest='time_interval',
-                     default=2.0,
+                     default=5.0,
                      help='Time stamp interval between azimuth blocks in '
                      'seconds. Must not be larger than "az_block_dur".')
     prs.add_argument('-m', '--method', type=str, dest='dop_method',
