@@ -29,7 +29,8 @@ class TestGenElNullRangeProduct:
         orbit_file=None, attitude_file=None, plot=False, polyfit_deg=6,
         exclude_nulls=None, sample_delays=None, sample_delays2=None,
         amp_ratio_imbalances=None, phase_diff_imbalances=None,
-        time_start=0.0, time_dur_max=None
+        time_start=0.0, time_dur_max=None,
+        duration_dc_remove_az=0.5
     )
 
     def test_correct_args(self):
@@ -83,4 +84,8 @@ class TestGenElNullRangeProduct:
     def test_aztime_limits(self):
         self.args.time_start = 0.1
         self.args.time_dur_max = 1.2
+        gen_el_null_range_product(self.args)
+
+    def test_no_az_dc_removal(self):
+        self.args.duration_dc_remove_az = None
         gen_el_null_range_product(self.args)
