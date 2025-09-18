@@ -6,6 +6,7 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Sequence
 from pathlib import Path
+from collections.abc import Iterator
 try:
     from matplotlib import pyplot as plt
 except ImportError:
@@ -59,6 +60,7 @@ def el_null_range_from_raw_ant(
         apply_caltone=False,
         imbalances_right2left=None,
         sample_delays_wrt_left=None,
+        duration_dc_remove_az=0.5,
         logger=None,
         plot=False,
         out_path='.',
@@ -130,6 +132,12 @@ def el_null_range_from_raw_ant(
         The negative of these delays shall be applied to the right channel
         to compensate for the relative delays between two of each null pair.
         Alternatively, the left channels can be compensated by the same delays.
+    duration_dc_remove_az: float or None, default=0.5
+        Approximate AZ-block duration in (seconds) to remove DC in order to
+        mitigate internal calibration signal such as Caltone that can bias
+        pointing estimation. Must be a positive value not greater than
+        `az_block_dur`! Its value may be modified to make it an integer
+        fraction of `az_block_dur`! If None, no DC removal in AZ.
     logger : logging.Logger, optional
         If not provided a logger with StreamHandler will be set.
     plot : bool, default=False
@@ -296,7 +304,7 @@ def el_null_range_from_raw_ant(
 
     # get number of range lines per azimuth block and check if within
     # [1, num_rgls]
-    num_rgl_block = round(az_block_dur * prf)
+    num_rgl_block = int(az_block_dur * prf)
     if num_rgl_block > num_rgls:
         logger.warning(
             f'Azimuth block duration w/ lines # {num_rgl_block} exceeds max '
@@ -304,11 +312,37 @@ def el_null_range_from_raw_ant(
             'azimuth duration!'
         )
         num_rgl_block = num_rgls
+        # update AZ block duration
+        az_block_dur = num_rgl_block / prf
     if num_rgl_block < 1:
         raise ValueError('Azimuth block duration is smaller than mean PRI!')
     if (num_rgls > 10 and num_rgl_block < 10):
         logger.warning('Azimuth block duration is smaller than "10xPRI".'
                        ' This can lead to poor null estimation!')
+    # check AZ block duration for DC removal in AZ
+    if duration_dc_remove_az is not None:
+        # check allowable min/max value for AZ DC removal duration.
+        if (not (duration_dc_remove_az > 0.0) or
+                duration_dc_remove_az > az_block_dur):
+            raise ValueError(
+                f'"duration_dc_remove_az" {duration_dc_remove_az} (sec) must '
+                'be a positive value not greater than "az_block_dur" '
+                f'{az_block_dur} (sec)!'
+            )
+        # Now force DC-removal duration to be an integer
+        # fraction of Doppler duration
+        n_ratio = round(az_block_dur / duration_dc_remove_az)
+        dur_dc_rm_az_new = az_block_dur / n_ratio
+        logger.warning(
+            'To force "duration_dc_remove_az" to be an integer fraction of '
+            f'"az_block_dur" {az_block_dur} (sec), it is modified from '
+            f'{duration_dc_remove_az} (sec) to {dur_dc_rm_az_new} (sec)!'
+        )
+        nrgl_dc_rm = int(prf * dur_dc_rm_az_new)
+        logger.info('Number range lines used in AZ-blocked '
+                    f'DC removal -> {nrgl_dc_rm}')
+    else:
+        logger.warning('No blocked DC removal in AZ!')
 
     # get number of azimuth blocks
     num_azimuth_block = num_rgls // num_rgl_block
@@ -449,6 +483,18 @@ def el_null_range_from_raw_ant(
         sbsw_valid = valid_sbsw_all[:, s_rgl]
         fill_gaps(echo_left, sbsw_valid)
         fill_gaps(echo_right, sbsw_valid)
+        # Remove DC in AZ to mitigate internal cal signals such as
+        # Caltone and its intermods that can bias null formation
+        # DC term can also be removed in null pattern after null formation
+        # However, the ratio of two-tap DBF can introduce bias when there
+        # is channel imbalance between left and right!
+        if duration_dc_remove_az is not None:
+            num_lines = s_rgl.stop - s_rgl.start
+            for slice_rm_dc in _slice_gen(num_lines, nrgl_dc_rm):
+                echo_left[slice_rm_dc] -= np.nanmean(
+                    echo_left[slice_rm_dc], axis=0)
+                echo_right[slice_rm_dc] -= np.nanmean(
+                    echo_right[slice_rm_dc], axis=0)
         # if requested, apply inverse of slow-time averaged
         # caltone coeffs to echo pairs (left, right)
         if apply_caltone:
@@ -774,3 +820,33 @@ def _plot_null_pow_patterns(pow_pat_null, null_num, null_file, az_time,
             bbox=plt_props)
     fig.savefig(null_file)
     plt.close()
+
+
+def _slice_gen(
+        n_smp: int, n_smp_blk: int, idx_start: int = 0) -> Iterator[slice]:
+    """slice generator.
+
+    Parameters
+    ----------
+    n_smp : int
+        Total number of samples
+    n_smp_blk : int
+        Number of samples per full block
+    idx_start : int, default=0
+        Start index
+
+    Yields
+    ------
+    slice
+        slice object for each block.
+        The last block can have more
+        number of samples than `n_smp_blk`!
+
+    """
+    n_blk = n_smp // n_smp_blk
+    i_start = idx_start
+    for n in range(n_blk - 1):
+        i_stop = i_start + n_smp_blk
+        yield slice(i_start, i_stop)
+        i_start = i_stop
+    yield slice(i_start, idx_start + n_smp)

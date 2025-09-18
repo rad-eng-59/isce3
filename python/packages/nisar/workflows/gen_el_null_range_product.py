@@ -144,6 +144,14 @@ def cmd_line_parser():
                            'Default is entire L0B duration starting from '
                            '`time-start`.')
                      )
+    prs.add_argument('--duration-dc-remove-az', type=float, default=0.5,
+                     help=('Time duration (seconds) of AZ blocks for DC '
+                           'removal in AZ in order to mitigate Caltone and '
+                           'internal signal biasing pointing Est. Must be a '
+                           'positive value not greater than `az_block_dur`! '
+                           'Its value may be modified to make it an integer '
+                           'fraction of `az_block_dur`.')
+                     )
     return prs.parse_args()
 
 
@@ -210,7 +218,8 @@ def gen_el_null_range_product(args):
     # get common keyword args for function "el_null_range_from_raw_ant"
     kwargs = {key: val for key, val in vars(args).items() if
               key in ['az_block_dur', 'apply_caltone', 'plot',
-                      'out_path', 'polyfit_deg']}
+                      'out_path', 'polyfit_deg', 'duration_dc_remove_az'
+                      ]}
 
     # logic for frequency band and TxRx polarization choices.
     # form a new dict "frq_pol" with key=freq_band and value=[txrx_pol]
