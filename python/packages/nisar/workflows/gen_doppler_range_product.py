@@ -97,8 +97,8 @@ def cmd_line_parser():
                      help='Plot Doppler centroids and save them in '
                      '*.png files at the specified output path')
     prs.add_argument('-o', '--out', type=str, dest='out_path', default='.',
-                     help='Output directory to dump Doppler product as well as'
-                     'PNG plots.')
+                     help='Output directory to dump Doppler product as well '
+                     'as PNG plots.')
     prs.add_argument('--orbit', type=str, dest='orbit_file',
                      help='Filename of an external orbit XML file. The orbit '
                      'data will be used in place of those in L0B. Default is '

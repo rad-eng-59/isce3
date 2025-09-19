@@ -17,6 +17,7 @@ from isce3.antenna import Frame
 from isce3.geometry import DEMInterpolator
 from isce3.signal import form_single_tap_dbf_echo
 from nisar.log import set_logger
+from isce3.focus import fill_gaps
 
 
 def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
@@ -550,6 +551,9 @@ def doppler_lut_from_raw(raw, *, freq_band='A', txrx_pol=None,
                     )
         else:  # single channel
             echo = raw_dset[slice_line]
+        # zero fill TX gap regions in particular for DM2 case
+        # where it is filled with strong TX chirp.
+        fill_gaps(echo, valid_sbsw_all[:, slice_line])
         # Remove DC in AZ to mitigate internal cal signals such as
         # Caltone and its intermods that can largely bias Doppler
         # centroid est.
