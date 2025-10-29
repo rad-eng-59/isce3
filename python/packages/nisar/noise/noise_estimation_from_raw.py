@@ -8,7 +8,6 @@ from collections.abc import Iterator
 
 import numpy as np
 from scipy.interpolate import PchipInterpolator
-from scipy import stats
 import h5py
 
 from isce3.noise import noise_pow_min_var_est, noise_pow_min_eigval_est
@@ -219,12 +218,11 @@ def extract_noise_only_lines(raw, freq_band, txrx_pol, max_lines=18944):
                 # lacks any noise-only range line!
                 yield dset[noise_index], noise_index
             else:
-                # XXX Use mid, last, most counted value to check for RCID
-                # given delay in updating low-rate telemetry (DRT) for NISAR!
-                rcid_mode = stats.mode(rcids).mode
-                if (rcids[-1] in rcid_special or
-                    rcids[len(rcids) // 2] in rcid_special or
-                        rcid_mode in rcid_special):
+                # XXX check if there is any noise-only RCID in RCIDs given
+                # no noise-only range lines (or sniffer pulses)!
+                # This is due to slow update of low-rate telemetry (DRT) of
+                # NISAR at both start and end of an observation!
+                if len(set(rcid_special).intersection(rcids)) > 0:
                     if max_lines < 3:
                         warn(f'Max number of noise-only lines {max_lines} is '
                              'too short! The results may be biased!')
@@ -550,7 +548,7 @@ def est_noise_power_from_raw(
                         ns_prod.freq_band,
                         ns_prod.method
                     )
-                noise_prods.append(ns_prod)
+                    noise_prods.append(ns_prod)
 
         else:  # other pol types than QP
             for txrx_pol in frq_pol[freq_band]:
@@ -623,7 +621,7 @@ def est_noise_power_from_raw(
                         ns_prod.freq_band,
                         ns_prod.method
                     )
-                noise_prods.append(ns_prod)
+                    noise_prods.append(ns_prod)
 
     return noise_prods
 
