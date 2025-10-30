@@ -5,6 +5,7 @@ from __future__ import annotations
 from warnings import warn
 from dataclasses import dataclass
 from collections.abc import Iterator
+import re
 
 import numpy as np
 from scipy.interpolate import PchipInterpolator
@@ -206,32 +207,40 @@ def extract_noise_only_lines(raw, freq_band, txrx_pol, max_lines=18944):
     _, _, _, noise_index = get_calib_range_line_idx(cal_path_mask)
     # check if it is a special case with RCID=1,2,3 where there is no
     # noise-only range line and TX=OFF.
-    # RCID is extracted from low rate telemetry if exists.
+    # RCID is extracted from granuleID if exists.
     dset = raw.getRawDataset(freq_band, txrx_pol)
     if len(noise_index) == 0:  # no noise-only range lines
         with h5py.File(raw.filename, mode='r', swmr=True) as fid:
             try:
-                rcids = fid[f'{raw._RootPath}/RRSD/lowRateTelemetry/DRT/'
-                            'IFSW/ST_IFSW_CUR_RCID'][()]
+                gid = fid[f'{raw._RootPath}/{raw._IdentificationPath}/'
+                          'granuleId'][()].decode()
             except KeyError:
                 # assumed it is not RCID=1,2,or3 but simply
                 # lacks any noise-only range line!
                 yield dset[noise_index], noise_index
             else:
-                # XXX check if there is any noise-only RCID in RCIDs given
-                # no noise-only range lines (or sniffer pulses)!
-                # This is due to slow update of low-rate telemetry (DRT) of
-                # NISAR at both start and end of an observation!
-                if len(set(rcid_special).intersection(rcids)) > 0:
-                    if max_lines < 3:
-                        warn(f'Max number of noise-only lines {max_lines} is '
-                             'too short! The results may be biased!')
-                    # treat all range lines as noise-only data
-                    nrgls, _ = dset.shape
-                    # do blocking in AZ
-                    for rgl_slice in _slice_gen(nrgls, max_lines):
-                        yield dset[rgl_slice], np.arange(
-                            rgl_slice.start, rgl_slice.stop)
+                # XXX check the granuleID under indetificaion to extract
+                # the filename and from that extract the three-digit RICD.
+                # The expected unique pattern shall be "_xxxS_" where ecch
+                # x represents an integer within [0, 9].
+                pat = re.compile('_[0-9]{3}S_')
+                gid_matches = pat.findall(gid)
+                # there should be only one occurance!
+                if len(gid_matches) == 1:
+                    # get the string
+                    gid_match = gid_matches[0]
+                    # extract the first three digits representing RCID
+                    rcid = int(gid_match[1:4])
+                    if rcid in rcid_special:
+                        if max_lines < 3:
+                            warn(f'Max number of noise-only lines {max_lines} '
+                                 'is too short! The results may be biased!')
+                        # treat all range lines as noise-only data
+                        nrgls, _ = dset.shape
+                        # do blocking in AZ
+                        for rgl_slice in _slice_gen(nrgls, max_lines):
+                            yield dset[rgl_slice], np.arange(
+                                rgl_slice.start, rgl_slice.stop)
 
     else:  # there exists noise only range lines so not a special mode!
         yield dset[noise_index], noise_index
@@ -548,7 +557,7 @@ def est_noise_power_from_raw(
                         ns_prod.freq_band,
                         ns_prod.method
                     )
-                    noise_prods.append(ns_prod)
+                noise_prods.append(ns_prod)
 
         else:  # other pol types than QP
             for txrx_pol in frq_pol[freq_band]:
@@ -621,7 +630,7 @@ def est_noise_power_from_raw(
                         ns_prod.freq_band,
                         ns_prod.method
                     )
-                    noise_prods.append(ns_prod)
+                noise_prods.append(ns_prod)
 
     return noise_prods
 
