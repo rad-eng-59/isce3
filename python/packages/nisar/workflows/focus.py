@@ -1911,7 +1911,8 @@ def focus(runconfig, runconfig_path=""):
             if cfg.processing.is_enabled.eap:
                 antpat = AntennaPattern(raw, dem, antparser,
                                         instparser, orbit, attitude,
-                                        el_lut=el_lut)
+                                        el_lut=el_lut,
+                                        freq_band=frequency)
 
                 log.info("Precomputing antenna patterns")
                 i = np.arange(rc_grid.shape[0])
