@@ -377,3 +377,23 @@ def _check_if_zero(arr: np.ndarray, msg: str):
         arr[...] = 1.0
     if is_zero.any():
         warn(f'Some values are zero for {msg}!')
+
+
+def get_pulsewidth_delay_from_raw(
+        raw: Raw,
+        freq_band: str,
+        txrx_pol: str
+) -> float:
+    """
+    Get delay (seconds) of the second pulse wrt the pulsewidth
+    of the first TX pulse in sequential split-spectrum transmit
+    for a desired dataset in L0B.
+    """
+    # check if band is B and it is split spectrum
+    if freq_band == 'B' and len(raw.frequencies) == 2:
+        pols = raw.polarizations
+        # check if this is sequential transmit
+        if txrx_pol in pols['A']:
+            _, _, _, _, pw = raw.getChirpParameters('A', txrx_pol[0])
+            return pw
+    return 0.0
