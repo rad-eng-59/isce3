@@ -394,6 +394,6 @@ def get_pulsewidth_delay_from_raw(
         pols = raw.polarizations
         # check if this is sequential transmit
         if txrx_pol in pols['A']:
-            _, _, _, _, pw = raw.getChirpParameters('A', txrx_pol[0])
+            _, _, _, pw = raw.getChirpParameters('A', txrx_pol[0])
             return pw
     return 0.0

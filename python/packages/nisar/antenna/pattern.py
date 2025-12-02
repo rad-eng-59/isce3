@@ -1,3 +1,4 @@
+from warnings import warn
 from collections import defaultdict
 from isce3.core import Orbit, Attitude, Linspace
 from isce3.geometry import DEMInterpolator
@@ -8,7 +9,8 @@ from nisar.products.readers.Raw import Raw
 from nisar.antenna import TxTrmInfo, RxTrmInfo, TxBMF, RxDBF
 from nisar.antenna.beamformer import get_pulse_index
 from nisar.antenna.rx_channel_imbalance_helpers import (
-    compute_all_rx_channel_imbalances_from_l0b
+    compute_all_rx_channel_imbalances_from_l0b,
+    get_pulsewidth_delay_from_raw
 )
 import numpy as np
 
@@ -236,6 +238,26 @@ class AntennaPattern:
                 self.freq_band, txrx_pol)
             self.finder[rxpol] = TimingFinder(self.pulse_times, rd_all[rxpol],
                                               wd_all[rxpol], wl_all[rxpol])
+            # XXX get pulsewidth delay and number of samples to correct
+            # RDs @ `self.fs_win` used in forming RX DBF pattern. This
+            # will account for delay in onboard DBF process due to first
+            # pulsewidth in sequential split spectrum TX.
+            # Note that half pulse wdith delay shall also be incorporated
+            # per ferquency band for all modes. That is delay of 0.5 * pw_a
+            # for "A" and delay of "pw_a + 0.5 * pw_b" for B.
+            # The fdollowing does NOT take into account half pulsewidth
+            # per TX pulse!
+            tm_delay = get_pulsewidth_delay_from_raw(
+                raw, self.freq_band, txrx_pol)
+            n_samp_delay = round(tm_delay * self.fs_win)
+            if n_samp_delay != 0:
+                warn(
+                    f'RD of RxDBF for band={self.freq_band} & pol={txrx_pol} '
+                    f'is corrected by {tm_delay * 1e6:.3f} (usec) or '
+                    f'equivalently # {n_samp_delay} samples @ '
+                    f'{self.fs_win} (MHz)!'
+                )
+                rd_all[rxpol] += n_samp_delay
 
         # build RxTRMs  and the first RxDBF for all possible RX
         # linear polarizations
