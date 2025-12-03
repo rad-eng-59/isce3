@@ -255,7 +255,7 @@ class AntennaPattern:
                     f'RD of RxDBF for band={self.freq_band} & pol={txrx_pol} '
                     f'is corrected by {tm_delay * 1e6:.3f} (usec) or '
                     f'equivalently # {n_samp_delay} samples @ '
-                    f'{self.fs_win} (MHz)!'
+                    f'{self.fs_win * 1e-6} (MHz)!'
                 )
                 rd_all[rxpol] += n_samp_delay
 
