@@ -257,7 +257,7 @@ class AntennaPattern:
                     f'equivalently # {n_samp_delay} samples @ '
                     f'{self.fs_win * 1e-6} (MHz)!'
                 )
-                rd_all[rxpol] += n_samp_delay
+                rd_all[rxpol] -= n_samp_delay
 
         # build RxTRMs  and the first RxDBF for all possible RX
         # linear polarizations
