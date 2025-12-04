@@ -8,6 +8,7 @@ import h5py
 
 from nisar.products.readers.Raw import Raw
 from nisar.antenna import get_calib_range_line_idx, CalPath
+from isce3.core import speed_of_light
 
 
 @dataclass(frozen=True)
@@ -379,7 +380,7 @@ def _check_if_zero(arr: np.ndarray, msg: str):
         warn(f'Some values are zero for {msg}!')
 
 
-def get_pulsewidth_delay_from_raw(
+def get_range_delay_from_raw(
         raw: Raw,
         freq_band: str,
         txrx_pol: str
@@ -394,6 +395,8 @@ def get_pulsewidth_delay_from_raw(
         pols = raw.polarizations
         # check if this is sequential transmit
         if txrx_pol in pols['A']:
-            _, _, _, pw = raw.getChirpParameters('A', txrx_pol[0])
-            return pw
+            sr_b = raw.getRanges('B', txrx_pol[0])
+            sr_a = raw.getRanges('A', txrx_pol[0])
+            delay = 2 * (sr_b.first - sr_a.first) / speed_of_light
+            return delay
     return 0.0
