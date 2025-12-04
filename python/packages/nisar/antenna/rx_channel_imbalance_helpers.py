@@ -45,7 +45,7 @@ class RX_CHANNEL_IMBALANCE_PRODUCT:
 def compute_all_rx_channel_imbalances_from_l0b(
         l0b_file: str | Raw,
         *,
-        caltone_freq: float = 1214.88e6,
+        caltone_freq: float | None = None,
         freq_band: str | None = None,
         txrx_pol: str | None = None
 ) -> Dict[Tuple[str, str], RX_CHANNEL_IMBALANCE_PRODUCT]:
@@ -62,11 +62,12 @@ def compute_all_rx_channel_imbalances_from_l0b(
     ----------
     l0b_file : str or nisar.products.readers.Raw
         L0B filename or Raw object
-    caltone_freq : float, default=1214.88e6
+    caltone_freq : float or None. Optional
         Caltone frequency in Hz.
-    freq_band : str, optional
+        If None (default), it will be extracted from DRT in L0B.
+    freq_band : str. Optional
         "A" or "B". Default is all.
-    txrx_pol: str, optional
+    txrx_pol : str. Optional
         TR pol in `freq_band` such as "HH", "HV", etc.
         Default is all.
 
@@ -111,7 +112,7 @@ def compute_rx_channel_imbalance(
         raw: Raw,
         freq_band: str,
         txrx_pol: str,
-        caltone_freq: float = 1214.88e6
+        caltone_freq: float | None = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     """
     Compute 12 complex RX channel imbalance based on LNA/CALTONE ratio
@@ -269,8 +270,13 @@ def correct_lna_caltone_ratio_for_second_band(
         raw: Raw,
         freq_band: str,
         txrx_pol: str,
-        caltone_freq: float = 1214.88e6
+        caltone_freq: float | None = None
 ) -> Tuple[np.ndarray, np.ndarray]:
+    # Get calton efrequency from DRT if not provided
+    if caltone_freq is None:
+        caltone_freq = parse_caltone_freq_from_drt(raw, txrx_pol)
+        warn(f'Caltone frequency is extracted from {txrx_pol[1]}-pol DRT '
+             f'-> {caltone_freq * 1e-6:.3f} (MHz)')
     # XXX check if product from the second band so we can modify
     # the results from the first band only if there is a
     # relative delay offset in one of qFSP vs others, that is
@@ -400,3 +406,29 @@ def get_range_delay_from_raw(
             delay = 2 * (sr_b.first - sr_a.first) / speed_of_light
             return delay
     return 0.0
+
+
+def parse_caltone_freq_from_drt(
+        raw: Raw,
+        txrx_pol: str
+) -> float:
+    """get caltone frequency in Hz from low rate telemetry in L0B."""
+    # default caltone if dataset is not available (Hz)
+    default = 1214.88e6
+    # frequency of local oscillator (Hz)
+    lo = 1200e6
+    # ADC clock (Hz)
+    clock = 240e6
+    c_p = (f'{raw.TelemetryPath}/DRT/MISC/CP_IFSW_CALTONE_PHASE_STEP_'
+           f'{txrx_pol[1]}')
+    with h5py.File(raw.filename, mode='r', swmr=True) as f5:
+        try:
+            ds_caltone_phase = f5[c_p]
+        except KeyError:
+            warn(f'Missing path "{c_p}" in L0B! Caltone frequency will '
+                 f'be set to {default} (Hz)')
+            return default
+        else:
+            i_cal = np.median(ds_caltone_phase[()]).astype(int)
+            caltone_freq = (i_cal / 2**32) * clock + lo
+            return caltone_freq
