@@ -156,8 +156,9 @@ class AntennaPattern:
     freq_band : {'A', 'B'} or None. Optional
             If none, the very first frequency band will
             be used.
-    caltone_freq: float, default=1214.88e6
+    caltone_freq: float or None. Optional
         Caltone frequency in Hz.
+        If None (default), it will be extracted from telemetry DRT in L0B.
 
     """
 
@@ -168,7 +169,7 @@ class AntennaPattern:
                  norm_weight=True,
                  el_spacing_min=8.72665e-5,
                  freq_band=None,
-                 caltone_freq=1214.88e6):
+                 caltone_freq=None):
 
         self.orbit = orbit.copy()
         self.attitude = attitude.copy()
