@@ -159,6 +159,9 @@ class AntennaPattern:
     caltone_freq: float or None. Optional
         Caltone frequency in Hz.
         If None (default), it will be extracted from telemetry DRT in L0B.
+    delay_ofs_dbf: float, default=2.1474e-6
+        Delay offset (seconds) in data window position of onboard DBF
+        process applied to all bands and polarizations.
 
     """
 
@@ -169,7 +172,8 @@ class AntennaPattern:
                  norm_weight=True,
                  el_spacing_min=8.72665e-5,
                  freq_band=None,
-                 caltone_freq=None):
+                 caltone_freq=None,
+                 delay_ofs_dbf=2.1474e-6):
 
         self.orbit = orbit.copy()
         self.attitude = attitude.copy()
@@ -246,6 +250,7 @@ class AntennaPattern:
             # as well as the difference in filter group delays.
             tm_delay = get_range_delay_from_raw(
                 raw, self.freq_band, txrx_pol)
+            tm_delay += delay_ofs_dbf
             n_samp_delay = round(tm_delay * self.fs_win)
             if n_samp_delay != 0:
                 warn(
