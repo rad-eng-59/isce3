@@ -40,6 +40,9 @@ class RxChannelImbalanceProduct:
         if (self.lna_caltone_ratio.size != self.ntap_dominant.size
                 != self.time_delays_sec.size):
             raise ValueError('The size of all arrays must be equal!')
+        if self.lna_caltone_ratio.size != 12:
+            warn('The size of LNA-CALTONE ratio is '
+                 f'{self.lna_caltone_ratio.size} instead of 12!')
 
 
 def compute_all_rx_channel_imbalances_from_l0b(
