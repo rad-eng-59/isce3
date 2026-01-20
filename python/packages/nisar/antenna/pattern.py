@@ -195,9 +195,7 @@ class AntennaPattern:
         self.txrx_pols = raw.polarizations[self.freq_band]
         # comput all RX channel imbalances over all
         # txrx pols of a desired frequency band.
-        # This RX imbalanced is basically LNA/CALTONE ratio!
-        # XXX perhaps Caltone frequency can be parsed from L0B DRT
-        # rather than provided as an input!
+        # This RX imbalanced is basically LNA/CALTONE ratio.
         self.rx_imb = compute_all_rx_channel_imbalances_from_l0b(
             raw,
             freq_band=self.freq_band,
@@ -243,7 +241,7 @@ class AntennaPattern:
                 self.freq_band, txrx_pol)
             self.finder[rxpol] = TimingFinder(self.pulse_times, rd_all[rxpol],
                                               wd_all[rxpol], wl_all[rxpol])
-            # XXX get range delay offset for band B in split-spectrum to
+            # Get range delay offset for band B in split-spectrum to
             # correct RDs @ `self.fs_win` used in forming RX DBF pattern.
             # This will account for delay after onboard DBF due to
             # both the first pulsewidth in sequential TX chirps

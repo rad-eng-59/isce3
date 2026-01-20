@@ -94,9 +94,9 @@ def compute_all_rx_channel_imbalances_from_l0b(
         for txrx_pol in frq_pols[freq_band]:
             (lna_caltone_ratio, n_tap_dominant, time_delays, max_ratio
              ) = compute_rx_channel_imbalance(
-                raw,
-                freq_band,
-                txrx_pol,
+                raw=raw,
+                freq_band=freq_band,
+                txrx_pol=txrx_pol,
                 caltone_freq=caltone_freq
             )
             out[freq_band, txrx_pol] = RxChannelImbalanceProduct(
@@ -135,8 +135,7 @@ def compute_rx_channel_imbalance(
         normalization of RX channel imbalances.
 
     """
-    lna_mean, n_tap_dominant = get_lna_cal_mean(
-        raw, freq_band, txrx_pol)
+    lna_mean, n_tap_dominant = get_lna_cal_mean(raw, freq_band, txrx_pol)
     # get caltone mean over all RX channels
     caltone_mean = get_caltone_mean(raw, freq_band, txrx_pol)
     # Get complex ratio LNA/Caltone over all channels
@@ -272,12 +271,12 @@ def correct_lna_caltone_ratio_for_second_band(
         txrx_pol: str,
         caltone_freq: float | None = None
 ) -> Tuple[np.ndarray, np.ndarray]:
-    # Get calton efrequency from DRT if not provided
+    # Get caltone frequency from DRT if not provided
     if caltone_freq is None:
         caltone_freq = parse_caltone_freq_from_drt(raw, txrx_pol)
         warn(f'Caltone frequency is extracted from {txrx_pol[1]}-pol DRT '
              f'-> {caltone_freq * 1e-6:.3f} (MHz)')
-    # XXX check if product from the second band so we can modify
+    # Check if product from the second band so we can modify
     # the results from the first band only if there is a
     # relative delay offset in one of qFSP vs others, that is
     # one of the qFSP is an outlier due to  ADC clock/delay issue
@@ -289,7 +288,7 @@ def correct_lna_caltone_ratio_for_second_band(
         lna_caltone_ratio, dif_chirp_caltone_freq)
     if _is_product_from_second_band(raw, freq_band, txrx_pol):
         warn(f'correcting LNA/CALTONE for band={freq_band} and pol={txrx_pol}')
-        # if there is then get diff of frequency bands A dn B
+        # if there is then get diff of frequency bands A and B
         # to be used to correct phase from A for B
         fc_b, _, _, _ = raw.getChirpParameters('B', txrx_pol[0])
         phs_adj = 2 * np.pi * (fc_b - fc_a) * time_delay
@@ -321,7 +320,6 @@ def _is_product_from_second_band(
     if freq_band == "B" and len(raw.frequencies) == 2:
         if txrx_pol in raw.polarizations['A']:
             return True
-        return False
     return False
 
 
@@ -330,9 +328,9 @@ def _get_qfsp_delay_anomaly(
         dif_chirp_caltone_freq: float,
         adc_clock: float = 240e6) -> np.ndarray:
     """
-    get time delays for a qfSP with phase anomaly only for
-    12 channel NISAR L-band product.
-    For other case, it will be set to zero!
+    If the product is a 12-channel NISAR L-band product,
+    return the time delays for a qFSP with phase anomaly.
+    Else, return zeros.
     """
     if lna_caltone_ratio.size == 12:
         # group them into three 4-channels, one per qFSP
