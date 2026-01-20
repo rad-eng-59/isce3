@@ -12,7 +12,7 @@ from isce3.core import speed_of_light
 
 
 @dataclass(frozen=True)
-class RX_CHANNEL_IMBALANCE_PRODUCT:
+class RxChannelImbalanceProduct:
     """
     RX channel imbalance product extracted from LNA/CALTONE ratio
     for a certain frequency band and polarization.
@@ -48,7 +48,7 @@ def compute_all_rx_channel_imbalances_from_l0b(
         caltone_freq: float | None = None,
         freq_band: str | None = None,
         txrx_pol: str | None = None
-) -> Dict[Tuple[str, str], RX_CHANNEL_IMBALANCE_PRODUCT]:
+) -> Dict[Tuple[str, str], RxChannelImbalanceProduct]:
     """
     Compute 12 complex RX channel imbalance based on LNA/CALTONE ratio
     for over all bands and polarizations. The bands and polarizations are
@@ -75,7 +75,7 @@ def compute_all_rx_channel_imbalances_from_l0b(
     -------
     dict:
         A dict with keys (freq_band, txrx_pol) and values of type
-        `RX_CHANNEL_IMBALANCE_PRODUCT`
+        `RxChannelImbalanceProduct`
 
     """
     if isinstance(l0b_file, str):
@@ -99,7 +99,7 @@ def compute_all_rx_channel_imbalances_from_l0b(
                 txrx_pol,
                 caltone_freq=caltone_freq
             )
-            out[freq_band, txrx_pol] = RX_CHANNEL_IMBALANCE_PRODUCT(
+            out[freq_band, txrx_pol] = RxChannelImbalanceProduct(
                 lna_caltone_ratio=lna_caltone_ratio,
                 ntap_dominant=n_tap_dominant,
                 time_delays_sec=time_delays,
