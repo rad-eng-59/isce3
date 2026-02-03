@@ -6,7 +6,7 @@ import logging
 from nisar.mixed_mode.logic import PolChannelSet
 from nisar.products.readers.antenna import AntennaParser
 from nisar.products.readers.instrument import InstrumentParser
-from nisar.products.readers.Raw import Raw
+from nisar.products.readers.Raw import Raw, chirpcorrelator_caltype_from_raw
 from nisar.antenna import TxTrmInfo, RxTrmInfo, TxBMF, RxDBF
 from nisar.antenna.beamformer import get_pulse_index
 import numpy as np
@@ -114,8 +114,10 @@ def build_tx_trm(raw: Raw, pulse_times: np.ndarray, freq_band: str,
     """Build TxTrmInfo object """
     # Parse Tx-related Cal stuff used for Tx BMF
     tx_chanl = raw.getListOfTxTRMs(freq_band, tx_pol)
-    corr_tap2 = raw.getChirpCorrelator(freq_band, tx_pol)[..., 1]
-    cal_type = raw.getCalType(freq_band, tx_pol)
+    # get chirp correlator and cal type for co-pol product
+    chp_corr, cal_type = chirpcorrelator_caltype_from_raw(
+        raw, txrx_pol=2 * tx_pol)
+    corr_tap2 = chp_corr[..., 1]
     # build TxTRM  from Tx Cal stuff w/o optional "tx_phase"
     return TxTrmInfo(pulse_times, tx_chanl, corr_tap2,
                      cal_type)
