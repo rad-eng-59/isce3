@@ -1909,10 +1909,14 @@ def focus(runconfig, runconfig_path=""):
 
             # Precompute antenna patterns at downsampled spacing
             if cfg.processing.is_enabled.eap:
+                # XXX Due to a bug in respective DRT of some L0B products
+                # (CRID=05007), caltone.frequency is extrated from runconfig
+                # otherwise, it shall be set to None to be determined from DRT!
                 antpat = AntennaPattern(raw, dem, antparser,
                                         instparser, orbit, attitude,
                                         el_lut=el_lut,
-                                        freq_band=frequency)
+                                        freq_band=frequency,
+                                        caltone_freq=cfg.processing.caltone.frequency)
 
                 log.info("Precomputing antenna patterns")
                 i = np.arange(rc_grid.shape[0])
