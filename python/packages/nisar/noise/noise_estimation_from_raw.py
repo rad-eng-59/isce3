@@ -910,19 +910,19 @@ def _noise_product_rng_blocks(
             if cpi is None:
                 # if not set, set CPI to max possible value equal or
                 # greater than 3 with at least two CPI blocks if possible.
-                cpi = min(max(
+                cpi_out = min(max(
                     min(nrgl_valid, 3),
                     np.ceil(nrgl_valid / max_num_cpi_blocks).astype(int)
                 ), MAX_CPI_LEN)
             else:
-                cpi = min(nrgl_valid, cpi)
-                if cpi > MAX_CPI_LEN:
+                cpi_out = min(nrgl_valid, cpi)
+                if cpi_out > MAX_CPI_LEN:
                     logger.warning(
                         f'Too large CPI value! It exceeds max {MAX_CPI_LEN}!'
                     )
-            logger.info(f'MEE CPI size -> {cpi}')
+            logger.info(f'MEE CPI size -> {cpi_out}')
             pow_noise[nn] = noise_pow_min_eigval_est(
-                noise_rng_blk[idx_valid], cpi, scalar=scalar,
+                noise_rng_blk[idx_valid], cpi_out, scalar=scalar,
                 remove_mean=remove_mean, median_ev=median_ev)
         elif algorithm == 'MVE':
             pow_noise[nn] = noise_pow_min_var_est(
@@ -1092,6 +1092,7 @@ def est_noise_power_in_focus(
                  category=InvalidNoiseRangeBlockWarning)
             continue
         # run noise estimator per range block
+        cpi_out = cpi
         if algorithm == 'MEE':
             if nrgl_valid < 2:
                 # skip a range block if not enough number of valid noise-only
@@ -1104,14 +1105,14 @@ def est_noise_power_in_focus(
                 logger.warning(
                     f'CPI={cpi} is larger than valid noise-only range lines '
                     f'{nrgl_valid}. CPI is set to {nrgl_valid}!')
-                cpi = nrgl_valid
-            if cpi > MAX_CPI_LEN:
+                cpi_out = nrgl_valid
+            if cpi_out > MAX_CPI_LEN:
                 logger.warning(
                     f'Too large CPI value! It exceeds max {MAX_CPI_LEN}!'
                 )
-            logger.info(f'MEE CPI size -> {cpi}')
+            logger.info(f'MEE CPI size -> {cpi_out}')
             pow_noise[nn] = noise_pow_min_eigval_est(
-                noise_rng_blk[idx_valid], cpi, scalar=scalar,
+                noise_rng_blk[idx_valid], cpi_out, scalar=scalar,
                 remove_mean=remove_mean, median_ev=median_ev)
         elif algorithm == 'MVE':
             pow_noise[nn] = noise_pow_min_var_est(
