@@ -5,12 +5,13 @@ from isce3.geometry import DEMInterpolator
 import logging
 from nisar.products.readers.antenna import AntennaParser
 from nisar.products.readers.instrument import InstrumentParser
-from nisar.products.readers.Raw import Raw, chirpcorrelator_caltype_from_raw
+from nisar.products.readers.Raw import (
+    Raw, chirpcorrelator_caltype_from_raw, range_delay_sequential_tx_from_raw
+)
 from nisar.antenna import TxTrmInfo, RxTrmInfo, TxBMF, RxDBF
 from nisar.antenna.beamformer import get_pulse_index
 from nisar.antenna.rx_channel_imbalance_helpers import (
-    compute_all_rx_channel_imbalances_from_l0b,
-    get_range_delay_from_raw
+    compute_all_rx_channel_imbalances_from_l0b
 )
 import numpy as np
 
@@ -248,7 +249,7 @@ class AntennaPattern:
             # This will account for delay after onboard DBF due to
             # both the first pulsewidth in sequential TX chirps
             # as well as the difference in filter group delays.
-            tm_delay = get_range_delay_from_raw(
+            tm_delay = range_delay_sequential_tx_from_raw(
                 raw, self.freq_band, txrx_pol)
             tm_delay += delay_ofs_dbf
             n_samp_delay = round(tm_delay * self.fs_win)

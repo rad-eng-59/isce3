@@ -13,11 +13,13 @@ from warnings import warn
 from typing import Tuple
 from enum import IntEnum, unique
 from nisar.antenna import CalPath, get_calib_range_line_idx
+from isce3.core import speed_of_light
 
 # TODO some CSV logger
 log = logging.getLogger("Raw")
 
 PRODUCT = "RRSD"
+
 
 def find_case_insensitive(group: h5py.Group, name: str) -> str:
     for key in group:
@@ -178,12 +180,12 @@ class RawBase(Base, family='nisar.productreader.raw'):
         -------
         float
             Bandwidth in Hz.
-        
+
         """
         tx_path = self._pulseMetaPath(frequency=frequency, tx=tx)
         with h5py.File(self.filename, 'r', libver='latest', swmr=True) as f:
             return f[tx_path]["rangeBandwidth"][()]
-        
+
     @property
     def TelemetryPath(self):
         return f"{self.ProductPath}/lowRateTelemetry"
@@ -272,7 +274,7 @@ class RawBase(Base, family='nisar.productreader.raw'):
         Returns
         -------
         float
-            PRF in Hz.        
+            PRF in Hz.
 
         """
         _, az_time = self.getPulseTimes(frequency, tx)
@@ -376,7 +378,7 @@ class RawBase(Base, family='nisar.productreader.raw'):
         which starts at 1 at the beginning of a datatake and increases sequentially.
         Except for the first observation within a datatake, the first index will be
         some value other than 1.
-        
+
         If a rangeline was missed due to corrupted data, for example, that would be
         reflected as a skipped value in the index sequence.
 
@@ -630,7 +632,7 @@ class RawBase(Base, family='nisar.productreader.raw'):
         np.ndarray(complex)
             2-D complex float of caltone (CW) coefficients,
             size = [rangelines x channels].
-            
+
         """
         if polarization is None:
             polarization = self.polarizations[frequency][0]
@@ -1036,7 +1038,6 @@ class LegacyRaw(RawBase, family='nisar.productreader.raw'):
         return isce3.core.Attitude(old.time, qs, old.reference_epoch)
 
 
-
 class Raw(RawBase, family='nisar.productreader.raw'):
     # TODO methods for new telemetry fields.
     pass
@@ -1056,7 +1057,6 @@ def open_rrsd(filename) -> RawBase:
         return Raw(hdf5file=filename)
 
 
-
 @unique
 class PolarizationTypeId(IntEnum):
     """Enumeration for polarization types of L-band NISAR"""
@@ -1070,6 +1070,8 @@ class PolarizationTypeId(IntEnum):
     quasi_quad = 7
     quasi_dual = 8
 
+
+# helper functions that uses Raw as input
 
 def polarization_type_from_drt(raw: Raw) -> PolarizationTypeId:
     """Get polarization ID and type from L0B DRT"""
@@ -1182,3 +1184,83 @@ def chirpcorrelator_caltype_from_raw(
             warn(f'Set HPA cal type for x-pol {txrx_pol} to INVALID!')
             cal_type[idx_hpa] = CalPath.INVALID
     return chp_cor, cal_type
+
+
+def caltone_frequency_from_raw(
+        raw: Raw,
+        txrx_pol: str
+) -> float:
+    """get caltone frequency in Hz from low rate telemetry in L0B
+
+    Parameters
+    ----------
+    raw : nisar.products.readers.Raw
+    txrx_pol : str
+        TxRx polarization such as HH, VH, etc
+
+    Returns
+    -------
+    float
+        Caltone frequency in Hz.
+
+    Notes
+    -----
+    If the resepctive DRT field is not found in L0B, caltone frequency
+    will be set to 1214.883 MHz.
+
+    """
+    # default caltone if dataset is not available (Hz)
+    default = 1214.883e6
+    # frequency of local oscillator (Hz)
+    lo = 1200e6
+    # ADC clock (Hz)
+    clock = 240e6
+    c_p = (f'{raw.TelemetryPath}/DRT/MISC/CP_IFSW_CALTONE_PHASE_STEP_'
+           f'{txrx_pol[1]}')
+    with h5py.File(raw.filename, mode='r', swmr=True) as f5:
+        try:
+            ds_caltone_phase = f5[c_p]
+        except KeyError:
+            warn(f'Missing path "{c_p}" in L0B! Caltone frequency will '
+                 f'be set to {default} (Hz)')
+            return default
+        else:
+            i_cal = np.median(ds_caltone_phase[()]).astype(int)
+            caltone_freq = (i_cal / 2**32) * clock + lo
+            return caltone_freq
+
+
+def range_delay_sequential_tx_from_raw(
+        raw: Raw,
+        freq_band: str,
+        txrx_pol: str
+) -> float:
+    """
+    Get range delay (seconds) of the second pulse wrt the pulsewidth
+    of the first TX pulse in sequential split-spectrum transmit
+    for L0B for specific frequency band and polarization if exists.
+
+    Parameters
+    ----------
+    raw : nisar.products.readers.Raw
+    freq_band: str
+        Frequency band such A or B.
+    txrx_pol : str
+        TxRx polarization such as HH, VH, etc
+
+    Returns
+    -------
+    float
+        Delay in seconds
+
+    """
+    # check if band is B and it is split spectrum
+    if freq_band == 'B' and len(raw.frequencies) == 2:
+        pols = raw.polarizations
+        # check if this is sequential transmit
+        if txrx_pol in pols['A']:
+            sr_b = raw.getRanges('B', txrx_pol[0])
+            sr_a = raw.getRanges('A', txrx_pol[0])
+            delay = 2 * (sr_b.first - sr_a.first) / speed_of_light
+            return delay
+    return 0.0
