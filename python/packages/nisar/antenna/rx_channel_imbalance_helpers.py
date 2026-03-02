@@ -125,6 +125,18 @@ def compute_rx_channel_imbalance(
     correlator as well as detected relative time delays for all RX channels
     for debugging purposes.
 
+    Parameters
+    ----------
+    aw : Raw
+        ISCE3 NISAR L0B product parser
+    freq_band: str,
+        A or B
+    txrx_pol : str
+        HH, HV, etc
+    caltone_freq : float or None, optional.
+        Caltone frequency in Hz. If None, it will be parsed from DRT
+        field of L0B product.
+
     Returns
     -------
     lna_caltone_ratio: np.ndarray(complex)
@@ -164,7 +176,26 @@ def get_lna_cal_mean(
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Returns mean complex LNA values and dominant tap
-    numbers within [1, 2, 3] for all channels
+    numbers within [1, 2, 3] for all channels of a
+    desired polarization.
+
+    Parameters
+    ----------
+    raw : Raw
+        ISCE3 NISAR L0B product parser
+    txrx_pol : str
+        HH, HV, etc
+
+    Returns
+    -------
+    np.ndarray(complex)
+        1-D array of slow-time averaged LNA CAL for all RX channels.
+        The size is the number of RX channels.
+    np.ndarray(int)
+        1-D array of dominant tap number of LNA three-tap chirp-correlator,
+        a value within [1, 3] for all RX channels.
+        The size is the number of RX channels.
+
     """
     chp_cor, cal_type = chirpcorrelator_caltype_from_raw(
         raw=raw,
@@ -212,6 +243,37 @@ def correct_lna_caltone_ratio_for_second_band(
         txrx_pol: str,
         caltone_freq: float | None = None
 ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Correct complex LNA/CALTONE ratio already obtained from the
+    first frequency band for the second frequency band if exists
+    in raw L0B product per desired polarization
+    and band.
+    It also return the respective time delays for all three qFSP
+    (12 RX channels).
+
+    Parameters
+    ----------
+    lna_caltone_ratio: np.ndarray(complex)
+        Complex LNA/CALTONE ratio over all 12 RXs
+    raw : Raw
+        ISCE3 NISAR L0B product parser
+    freq_band: str,
+        A or B
+    txrx_pol : str
+        HH, HV, etc
+    caltone_freq : float or None, optional.
+        Caltone frequency in Hz. If None, it will be parsed from DRT
+        field of L0B product.
+
+    Returns
+    -------
+    np.ndarray(complex)
+        1-D array of slow-time averaged Caltone for all RX channels
+    np.ndarray(float)
+        1-D array of relative time delays of three qFSP (12 RX channels)
+        in seconds.
+
+    """
     # Get caltone frequency from DRT if not provided
     if caltone_freq is None:
         caltone_freq = caltone_frequency_from_raw(raw, txrx_pol)
@@ -249,6 +311,25 @@ def get_caltone_mean(
         freq_band: str,
         txrx_pol: str
 ) -> np.ndarray:
+    """
+    Get average Caltone across all range lines for a desired
+    band and polarization from L0B.
+
+    Parameters
+    ----------
+    raw : Raw
+        ISCE3 NISAR L0B product parser
+    freq_band: str,
+        A or B
+    txrx_pol : str
+        HH, HV, etc
+
+    Returns
+    -------
+    np.ndarray(complex)
+        1-D array of slow-time averaged Caltone for all RX channels
+
+    """
     # now get caltone always from swath
     caltone = raw.getCaltone(freq_band, txrx_pol)
     caltone_mean = _mean_2d(caltone)
@@ -259,10 +340,26 @@ def get_caltone_mean(
 def _is_product_from_second_band(
         raw: Raw,
         freq_band: str,
-        txrx_pol: str):
+        txrx_pol: str) -> bool:
     """
-    Determine whether the produt is avolable on both bands
-    and it is from the second band.
+    Determine whether the raw prodcut with dersied polarization
+    is available on both frequency bands and it is representing
+    the second frequency band "B".
+
+    Parameters
+    ----------
+    raw : Raw
+        ISCE3 NISAR L0B product parser
+    freq_band: str,
+        A or B
+    txrx_pol : str
+        HH, HV, etc
+
+    Returns
+    -------
+    bool
+        True if the product band/pol represent the second frequency band
+        in split-spectrum case, otherwise false.
     """
     if freq_band == "B" and len(raw.frequencies) == 2:
         if txrx_pol in raw.polarizations['A']:
@@ -278,6 +375,28 @@ def _get_qfsp_delay_anomaly(
     If the product is a 12-channel NISAR L-band product,
     return the time delays for a qFSP with phase anomaly.
     Else, return zeros.
+
+    Parameters
+    ----------
+    lna_caltone_ratio : np.ndarray(complex)
+        1-D array of complex LNA/CALTONE ratio with size equals
+        to the number of RX channels
+    dif_chirp_caltone_freq: float
+        Frequency difference between chirp and caltone in Hz.
+    adc_clock : float, default=240e6
+        Analogue-to-digital (ADC) clock rate of NISAR in Hz.
+
+    Returns
+    -------
+    time_delays : np.ndarray(float)
+        Rleative time delays of all three qFSP (12 RX channels) in seconds.
+        Same size as `lna_caltone_ratio`.
+
+    Notes
+    -----
+    In case of non-NISAR case with less than 12 channels, all
+    delays are zero to zeros.
+
     """
     if lna_caltone_ratio.size == 12:
         # group them into three 4-channels, one per qFSP
@@ -302,24 +421,63 @@ def _get_qfsp_delay_anomaly(
     return time_delays
 
 
-def _mean_2d(data: np.ndarray, perc: float = 0.0) -> np.asarray:
+def _mean_2d(data: np.ndarray, perc: float = 5.0) -> np.asarray:
     """
-    Compute mean within percentile [perc, 100-perc],
+    Compute mean within percentile [perc, 100-perc] along range lines,
     of a 2-D complex array with shape (rangelines, channels)
     due to bad telemetry.
+
+    Parameters
+    ----------
+    data : np.ndarray(complex)
+        2-D complex float data with shape (rangelines, channels)
+    perc : float, default=5
+        Percentile, a value within [0, 100].
+        The values within [perc, 100 - perc] are used in the mean
+        calculation. If no value in `data` that fullfills this,
+        the median of `data` will be used instead.
+        Note that, `perc` and `100-perc` will lead to the same
+        exact outcome.
+        Also, `perc=50` is equivalent to `np.nanmedian`.
+
+    Returns
+    -------
+    np.ndarray(complex)
+        1-D array of size equal to number of channels representing
+        the mean across range lines.
+
     """
     # or simply np.nanmean(data, axis=0)
     d = np.sort(np.abs(data), axis=0)
     q1_all, q3_all = np.percentile(d, q=[perc, 100 - perc], axis=0)
     mean_all = []
     for cc, (q1, q3) in enumerate(zip(q1_all, q3_all)):
+        q1, q3 = np.sort([q1, q3])
         data_q1_q3 = data[(d[:, cc] >= q1) & (d[:, cc] <= q3), cc]
-        mean_all.append(np.nanmean(data_q1_q3))
+        if data_q1_q3.size == 0:
+            # use median (perc=50) if no values within desired percentiles.
+            mean_all.append(np.nanmedian(data[:, cc]))
+        else:  # there is at least one value within desired percentiles
+            mean_all.append(np.nanmean(data_q1_q3))
     return np.asarray(mean_all)
 
 
-def _check_if_zero(arr: np.ndarray, msg: str):
-    is_zero = np.isclose(arr, 0)
+def _check_if_zero(arr: np.ndarray, msg: str) -> None:
+    """
+    Check a telemetry array to see if all or some of its values are zero
+    and then issue an appropriate warning with message `msg`
+    If all values are zero, then input wiill be filled with unity to avoid
+    failure for older L0B products.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Input array to be modified in place only if all its elements are zero!.
+    msg : str
+        Message to be used as part of a warning message.
+
+    """
+    is_zero = np.isclose(arr, 0, atol=1e-9)
     if is_zero.all():
         # XXX to avoid unit test failure and old sim L0B
         # a warning will be issued and all values will be set
