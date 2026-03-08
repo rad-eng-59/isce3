@@ -291,7 +291,8 @@ def correct_lna_caltone_ratio_for_second_band(
     # one of the qFSP is an outlier due to  ADC clock/delay issue
     # check if there is delay anomaly among three qFSP.
     if _is_product_from_second_band(raw, freq_band, txrx_pol):
-        warn(f'correcting LNA/CALTONE for band={freq_band} and pol={txrx_pol}')
+        log.info(
+            f'correcting LNA/CALTONE for band={freq_band} and pol={txrx_pol}')
         fc_a, _, _, _ = raw.getChirpParameters('A', txrx_pol[0])
         # get diff of chirp (band=A) and caltone freq for delay detection
         dif_chirp_caltone_freq = fc_a - caltone_freq
