@@ -1157,7 +1157,7 @@ def is_raw_quad_pol(raw: Raw) -> bool:
 
 def first_tx_pol_for_quad(raw: Raw) -> str:
     """
-    Get first TX polarization, H or V, from only linear Quad pol product
+    Determine first TX polarization, H or V, from only linear Quad pol product
 
     Parameters
     ----------
@@ -1174,10 +1174,21 @@ def first_tx_pol_for_quad(raw: Raw) -> str:
     ValueError
         If L0B product is not linear quad pol.
 
+    Notes
+    -----
+    For NISAR L-band linear quad pol, V is transmitted on
+    odd range line index while H is on even one.
+    Preferably by checking the first range line index from HRT,
+    the first TX polarization can be reliably determined.
+    If such information does not exist in L0B product,
+    the first individual range line index per TX polarization
+    is compared for the smallest index to represent first
+    TX pol.
+
     """
     if not is_raw_quad_pol(raw):
         raise ValueError('Not a quad pol!')
-    idx_rgl = raw._parse_rangeline_index_from_hrt()[0]
+    idx_rgl = raw._parse_rangeline_index_from_hrt()
     # if not in HRT parse single-pol version from swath path
     if idx_rgl is None:
         idx_rgl_h = raw.getRangeLineIndex('A', 'H')[0]
@@ -1186,7 +1197,7 @@ def first_tx_pol_for_quad(raw: Raw) -> str:
             return 'V'
         return 'H'
     else:  # odd range line is V pol first and even is H pol first!
-        return {0: 'H', 1: 'V'}.get(idx_rgl % 2)
+        return {0: 'H', 1: 'V'}.get(idx_rgl[0] % 2)
 
 
 def opposite_linear_pol(pol: str) -> str:
