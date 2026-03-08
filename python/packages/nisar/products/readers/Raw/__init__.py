@@ -5,7 +5,7 @@ from .Raw import (
     PolarizationTypeId,
     is_raw_quad_pol,
     first_tx_pol_for_quad,
-    opposite_pol,
+    opposite_linear_pol,
     caltone_frequency_from_raw,
     range_delay_sequential_tx_from_raw
 )

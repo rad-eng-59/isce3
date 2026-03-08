@@ -20,7 +20,7 @@ from nisar.products.readers.Raw import (
     chirpcorrelator_caltype_from_raw,
     is_raw_quad_pol,
     first_tx_pol_for_quad,
-    opposite_pol
+    opposite_linear_pol
 )
 
 # Global Noise-related Constants
@@ -593,7 +593,7 @@ def est_noise_power_from_raw(
                 # first TX pol.
                 txrx_p = txrx_pol
                 if is_quad_pol and txrx_pol[0] != first_tx_pol:
-                    txrx_p = opposite_pol(txrx_pol[0]) + txrx_pol[1]
+                    txrx_p = opposite_linear_pol(txrx_pol[0]) + txrx_pol[1]
                     logger.warning(f'Use noise-only range lines from {txrx_p} '
                                    f'for {txrx_pol}!')
                 # parse one noise dataset

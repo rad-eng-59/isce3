@@ -22,7 +22,7 @@ from nisar.products.readers.Raw import (
     chirpcorrelator_caltype_from_raw,
     is_raw_quad_pol,
     first_tx_pol_for_quad,
-    opposite_pol
+    opposite_linear_pol
 )
 from nisar.products.readers.rslc_cal import (RslcCalibration,
     parse_rslc_calibration, get_scale_and_delay, check_cal_validity_dates)
@@ -1993,7 +1993,7 @@ def focus(runconfig, runconfig_path=""):
                     first_tx_pol = first_tx_pol_for_quad(raw)
                     log.info(f'Quad pol w/ first {first_tx_pol} pol!')
                     if pol[0] != first_tx_pol:
-                        pol_ns = opposite_pol(pol[0]) + pol[1]
+                        pol_ns = opposite_linear_pol(pol[0]) + pol[1]
                         log.warning('Get noise-only range lines from '
                                     f'{pol_ns} for {pol} of quad pol!')
                         ds_ns = raw.getRawDataset(channel_in.freq_id, pol_ns)

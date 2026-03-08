@@ -1189,8 +1189,8 @@ def first_tx_pol_for_quad(raw: Raw) -> str:
         return {0: 'H', 1: 'V'}.get(idx_rgl % 2)
 
 
-def opposite_pol(pol: str) -> str:
-    """Get the oppsoite pol
+def opposite_linear_pol(pol: str) -> str:
+    """Get the oppsoite linear pol
     Parameters
     ----------
     pol : str
@@ -1212,7 +1212,8 @@ def opposite_pol(pol: str) -> str:
     elif pol == 'V':
         return 'H'
     else:
-        return pol
+        raise ValueError(
+            f'Expected linear pol "H" or "V" but got "{pol}"!')
 
 
 def chirpcorrelator_caltype_from_raw(
@@ -1256,7 +1257,7 @@ def chirpcorrelator_caltype_from_raw(
             cal_type = cal_type[::2]
         else:  # the second TX pol
             # get data from the opposite TX pol
-            x_pol = opposite_pol(txrx_pol[0]) + txrx_pol[1]
+            x_pol = opposite_linear_pol(txrx_pol[0]) + txrx_pol[1]
             chp_cor_x, cal_type_x = chirpcorrelator_caltype_from_raw(
                 raw, txrx_pol=x_pol)
             # if co-pol get HPA value from same TX but
