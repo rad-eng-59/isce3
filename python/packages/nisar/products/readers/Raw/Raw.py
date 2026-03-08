@@ -1322,6 +1322,9 @@ def caltone_frequency_from_raw(
             return default
         else:
             i_cal = np.median(ds_caltone_phase[()]).astype(int)
+            if i_cal < 2**16:
+                warn('CALTONE_PHASE_STEP seems too small, '
+                     'caltone frequency may be invalid')
             caltone_freq = (i_cal / 2**32) * clock + lo
             return caltone_freq
 
