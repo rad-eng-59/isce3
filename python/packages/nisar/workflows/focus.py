@@ -1919,11 +1919,19 @@ def focus(runconfig, runconfig_path=""):
                 # XXX Due to a bug in respective DRT of some L0B products
                 # (CRID=05007), caltone.frequency is extrated from runconfig
                 # otherwise, it shall be set to None to be determined from DRT!
+                # The latter requires RSLC runconfig update to allow caltone
+                # frequency to be parsed directly from L0B product for more
+                # flexible configuration over wide range of L0B products.
+                # XXX the intrument-related delay offset used in DBF process
+                # shall be eventually obtained from instrument INT CAL HDF5
+                # once the respective product spec is updated (delay_ofs_dbf)!
+                # The default value is suitable for NISAR L-band instrument.
                 antpat = AntennaPattern(raw, dem, antparser,
                                         instparser, orbit, attitude,
                                         el_lut=el_lut,
                                         freq_band=frequency,
-                                        caltone_freq=cfg.processing.caltone.frequency)
+                                        caltone_freq=cfg.processing.caltone.frequency,
+                                        delay_ofs_dbf=-2.1474e-6)
 
                 log.info("Precomputing antenna patterns")
                 i = np.arange(rc_grid.shape[0])
