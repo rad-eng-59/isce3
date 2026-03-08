@@ -253,7 +253,7 @@ class AntennaPattern:
             tm_delay += delay_ofs_dbf
             n_samp_delay = round(tm_delay * self.fs_win)
             if n_samp_delay != 0:
-                warn(
+                log.info(
                     f'RD of RxDBF for band={self.freq_band} & pol={txrx_pol} '
                     f'is corrected by {tm_delay * 1e6:.3f} (usec) or '
                     f'equivalently # {n_samp_delay} samples @ '

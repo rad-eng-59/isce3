@@ -2,6 +2,7 @@ from __future__ import annotations
 from warnings import warn
 from typing import Tuple, Dict
 from dataclasses import dataclass
+import logging
 
 import numpy as np
 
@@ -9,6 +10,9 @@ from nisar.products.readers.Raw import (
     Raw, chirpcorrelator_caltype_from_raw, caltone_frequency_from_raw
 )
 from nisar.antenna import get_calib_range_line_idx
+
+
+log = logging.getLogger("nisar.antenna.rx_channel_imbalance_helpers")
 
 
 @dataclass(frozen=True)
@@ -278,8 +282,8 @@ def correct_lna_caltone_ratio_for_second_band(
     # Get caltone frequency from DRT if not provided
     if caltone_freq is None:
         caltone_freq = caltone_frequency_from_raw(raw, txrx_pol)
-        warn(f'Caltone frequency is extracted from {txrx_pol[1]}-pol DRT '
-             f'-> {caltone_freq * 1e-6:.3f} (MHz)')
+        log.info(f'Caltone frequency is extracted from {txrx_pol[1]}-pol DRT '
+                 f'-> {caltone_freq * 1e-6:.3f} (MHz)')
     # Loopback cal is only ever measured on main sub-band.
     # Thus, check if product from the second band so we can
     # modify the results from the main band only if there is a

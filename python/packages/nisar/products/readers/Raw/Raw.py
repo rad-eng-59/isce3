@@ -1277,7 +1277,7 @@ def chirpcorrelator_caltype_from_raw(
     if txrx_pol in ('HV', 'VH'):
         idx_hpa, _, _, _ = get_calib_range_line_idx(cal_type)
         if idx_hpa.size > 0:
-            warn(f'Set HPA cal type for x-pol {txrx_pol} to INVALID!')
+            log.info(f'Set HPA cal type for x-pol {txrx_pol} to INVALID!')
             cal_type[idx_hpa] = CalPath.INVALID
     return chp_cor, cal_type
 
