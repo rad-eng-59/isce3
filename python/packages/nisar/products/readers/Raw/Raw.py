@@ -1129,11 +1129,11 @@ def polarization_type_from_drt(raw: Raw) -> PolarizationTypeId:
             ds_pol = f5[pol_path]
         except KeyError:
             warn(f'Missing dataset "{pol_path}" in "{raw.filename}"')
-            id_pol = 6
+            return PolarizationTypeId.none
         else:
             i_pol = ds_pol[()]
             id_pol = np.nanmedian(i_pol)
-    return PolarizationTypeId(id_pol)
+            return PolarizationTypeId(id_pol)
 
 
 def is_raw_quad_pol(raw: Raw) -> bool:
