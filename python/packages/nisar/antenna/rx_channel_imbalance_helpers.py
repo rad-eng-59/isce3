@@ -363,10 +363,8 @@ def _is_product_from_second_band(
         True if the product band/pol represent the second frequency band
         in split-spectrum case, otherwise false.
     """
-    if freq_band == "B" and len(raw.frequencies) == 2:
-        if txrx_pol in raw.polarizations['A']:
-            return True
-    return False
+    return (freq_band == "B" and len(raw.frequencies) == 2 and
+            txrx_pol in raw.polarizations['A'])
 
 
 def _get_qfsp_delay_anomaly(
