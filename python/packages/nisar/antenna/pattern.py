@@ -233,8 +233,7 @@ class AntennaPattern:
         self.finder = dict()
 
         # get RD/WD/WL for all unique RX polarizations
-        # Loop over all freqs & pols since some RX pols may be found only on
-        # freq B (e.q. the QQP case).  Assume RD/WD/WL are the same for all
+        # Loop over all pols. Assume RD/WD/WL are the same for all
         # freqs/pols that have the same RX polarization.
         for txrx_pol in self.txrx_pols:
             rxpol = txrx_pol[1]

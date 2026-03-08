@@ -588,7 +588,7 @@ def est_noise_power_from_raw(
                 # calculate approximate ENBW for relatively white noise!
                 enbw = enbw_from_raw(raw, freq_band, txrx_pol[0])
                 logger.info(f'Approximate ENBW in (MHz) -> {enbw * 1e-6}')
-                # check if quad pol per telemetry then use the oppsoite
+                # check if quad pol per telemetry then use the opposite
                 # TX pol for noise range lines if that pol is not the
                 # first TX pol.
                 txrx_p = txrx_pol

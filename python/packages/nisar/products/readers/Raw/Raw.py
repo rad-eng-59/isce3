@@ -408,7 +408,8 @@ class RawBase(Base, family='nisar.productreader.raw'):
             txrx_pol: str) -> np.ndarray | None:
         """
         Parse three-tap chirp correlator array with shape (lines, 12, 3)
-        as well ass cal type with shape (lines,) from HRT QFSP.
+        as well as cal type with shape (lines,) from high-rate-telemetry
+        (HRT) quadrature first-stage processor (QFSP).
 
         Parameters
         ----------
@@ -419,7 +420,20 @@ class RawBase(Base, family='nisar.productreader.raw'):
         -------
         np.ndarray(complex) or None
             3-D complex array of chirp correlator with shape (Lines, channels, 3)
-            If the field does not exist None will be returned.
+            If the field does not exist, None will be returned.
+
+        See Also
+        --------
+        getChirpCorrelator
+
+        Notes
+        -----
+        This function simply parse 3-tap chirp correlator from low-level
+        HRT field of L0B as it is, e.g. w/o proper separation of co-pol
+        and cross-pol for Quad pol.
+        The main reason for `None` as a return value is to support old and
+        simulated NISAR L-band L0B products and ISCE3 test data where the
+        respective field is missing.
 
         """
         # get HRT path
@@ -465,7 +479,8 @@ class RawBase(Base, family='nisar.productreader.raw'):
             self,
             txrx_pol: str) -> np.ndarray | None:
         """
-        Parse cal type with shape (lines,) from HRT QFSP.
+        Parse cal-path types with shape (lines,) from high-rate telemetry
+        (HRT) quadrature first-stage processor (QFSP).
 
         Parameters
         ----------
@@ -477,6 +492,16 @@ class RawBase(Base, family='nisar.productreader.raw'):
         np.ndarray(uint8) or None
             1-D array of cal type w/ values HPA=0, LNA=1, BYPASS=2, and
             INVALID=255. If the field does not exist None will be returned.
+
+        See Also
+        --------
+        getCalType
+
+        Notes
+        -----
+        This function simply parse cal path types from low-level
+        HRT field of L0B as it is, e.g. w/o proper separation of co-pol
+        and cross-pol for Quad pol.
 
         """
         # get HRT path
@@ -1059,22 +1084,45 @@ def open_rrsd(filename) -> RawBase:
 
 @unique
 class PolarizationTypeId(IntEnum):
-    """Enumeration for polarization types of L-band NISAR"""
+    """Enumeration for polarization types of L-band NISAR
+    """
     single_h = 0
+    """Single Pol HH"""
     single_v = 1
+    """Single Pol VV"""
     dual_h = 2
+    """Dua Pol HH/HV"""
     dual_v = 3
+    """Dual Pol VV/VH"""
     quad = 4
+    """Linear Quad Pol HH/HV/VH/VV"""
     compact = 5
+    """Left Compact Pol LH/LV"""
     none = 6
+    """Unknown"""
     quasi_quad = 7
+    """Quasi Linear Quad Pol HH/HV(A) + VV/VH(B)"""
     quasi_dual = 8
+    """Quasi Dual Pol HH(A) + VV(B)"""
 
 
 # helper functions that uses Raw as input
 
 def polarization_type_from_drt(raw: Raw) -> PolarizationTypeId:
-    """Get polarization ID and type from L0B DRT"""
+    """
+    Get polarization ID and type from L0B DRT
+
+    Parameters
+    ----------
+    raw : nisar.products.readers.Raw
+        L0B raw parser object
+
+    Returns
+    --------
+    nisar.products.readers.Raw.PolarizationTypeId
+        An enumeration for various polarimetric modes of L-band NISAR.
+
+    """
     pol_path = f'{raw.TelemetryPath}/DRT/MISC/CP_IFSW_POLARIZATION'
     with h5py.File(raw.filename, mode='r', swmr=True) as f5:
         try:
@@ -1089,12 +1137,44 @@ def polarization_type_from_drt(raw: Raw) -> PolarizationTypeId:
 
 
 def is_raw_quad_pol(raw: Raw) -> bool:
-    """Determine whether raw L0B is Quad or not"""
+    """
+    Determine whether NISAR raw L0B product is
+    linear Quad or not.
+
+    Parameters
+    ----------
+    raw : nisar.products.readers.Raw
+        L0B raw parser object
+
+    Returns
+    --------
+    bool
+        True if the L0B product is quad pol otherwise False.
+
+    """
     return polarization_type_from_drt(raw) == PolarizationTypeId.quad
 
 
 def first_tx_pol_for_quad(raw: Raw) -> str:
-    """Get first TX polarization, H or V, from only Quad pol product"""
+    """
+    Get first TX polarization, H or V, from only linear Quad pol product
+
+    Parameters
+    ----------
+    raw : nisar.products.readers.Raw
+        L0B raw parser object
+
+    Returns
+    --------
+    str
+        TX polarization that transmitted first in the linear quad pol mode.
+
+    Raises
+    ------
+    ValueError
+        If L0B product is not linear quad pol.
+
+    """
     if not is_raw_quad_pol(raw):
         raise ValueError('Not a quad pol!')
     idx_rgl = raw._parse_rangeline_index_from_hrt()[0]
@@ -1110,7 +1190,23 @@ def first_tx_pol_for_quad(raw: Raw) -> str:
 
 
 def opposite_pol(pol: str) -> str:
-    """Get the oppsoite pol"""
+    """Get the oppsoite pol
+    Parameters
+    ----------
+    pol : str
+        Linear pol, H or V
+
+    Returns
+    -------
+    str
+        H if `pol=V` and V if `pol=H`
+
+    Raises
+    ------
+    ValueError
+        If input pol is circular `L` or `R`.
+
+    """
     if pol == 'H':
         return 'V'
     elif pol == 'V':
@@ -1125,7 +1221,7 @@ def chirpcorrelator_caltype_from_raw(
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Parse three-tap chirp correlator array with shape (lines, 12, 3)
-    as well ass cal type with shape (lines,) from Raw L0B for a certain
+    as well as cal type with shape (lines,) from Raw L0B for a certain
     TxRX pol
 
     Parameters
@@ -1159,12 +1255,12 @@ def chirpcorrelator_caltype_from_raw(
             chp_cor = chp_cor[::2]
             cal_type = cal_type[::2]
         else:  # the second TX pol
-            # get data from the opssoite TX pol
+            # get data from the opposite TX pol
             x_pol = opposite_pol(txrx_pol[0]) + txrx_pol[1]
             chp_cor_x, cal_type_x = chirpcorrelator_caltype_from_raw(
                 raw, txrx_pol=x_pol)
             # if co-pol get HPA value from same TX but
-            # fill in LNA/BYP from oppsoite TX
+            # fill in LNA/BYP from opposite TX
             if txrx_pol[0] == txrx_pol[1]:
                 chp_cor = chp_cor[1::2]
                 cal_type = cal_type[1::2]
@@ -1252,6 +1348,17 @@ def range_delay_sequential_tx_from_raw(
     -------
     float
         Delay in seconds
+
+    Notes
+    -----
+    It is assumed that slant ranges of A and B properly represent
+    the start of a first valid samples and all instrument relative
+    delays between A and B products due to onboard digital filetrs
+    are already corrected for.
+    Alternatively, one can use pulsewidth of band = A as range delay
+    for band B. But due to different bandwidths and onboard digital
+    filters, the respective group delays are diffrent and needs to
+    be taken into account on top of pulsewidth.
 
     """
     # check if band is B and it is split spectrum

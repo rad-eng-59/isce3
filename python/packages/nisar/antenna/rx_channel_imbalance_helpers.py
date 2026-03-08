@@ -20,7 +20,7 @@ class RxChannelImbalanceProduct:
     Attributes
     ----------
     lna_caltone_ratio: np.ndarray(complex)
-        Peak-normalized complex LNA/CALTONE ratio over all RXs
+        Peak-normalized complex LNA/CALTONE ratio over all RXs (typically 12)
     ntap_dominant: np.ndarray(int)
         Dominant tap number, a value within [1,3] over all RXs.
     time_delays_sec: np.ndarray(float)
@@ -119,7 +119,8 @@ def compute_rx_channel_imbalance(
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     """
     Compute 12 complex RX channel imbalance based on LNA/CALTONE ratio
-    for a desired frequency band and TR polarization.
+    for a desired frequency band and TR polarization, averaged over all
+    records in the raw data file.
 
     Also report the dominant tap number our of 3 for LNA three-tap
     correlator as well as detected relative time delays for all RX channels
@@ -127,7 +128,7 @@ def compute_rx_channel_imbalance(
 
     Parameters
     ----------
-    aw : Raw
+    raw : Raw
         ISCE3 NISAR L0B product parser
     freq_band: str,
         A or B
@@ -279,11 +280,12 @@ def correct_lna_caltone_ratio_for_second_band(
         caltone_freq = caltone_frequency_from_raw(raw, txrx_pol)
         warn(f'Caltone frequency is extracted from {txrx_pol[1]}-pol DRT '
              f'-> {caltone_freq * 1e-6:.3f} (MHz)')
-    # Check if product from the second band so we can modify
-    # the results from the first band only if there is a
+    # Loopback cal is only ever measured on main sub-band.
+    # Thus, check if product from the second band so we can
+    # modify the results from the main band only if there is a
     # relative delay offset in one of qFSP vs others, that is
     # one of the qFSP is an outlier due to  ADC clock/delay issue
-    # check if there is delay anomaly among three qFSP
+    # check if there is delay anomaly among three qFSP.
     if _is_product_from_second_band(raw, freq_band, txrx_pol):
         warn(f'correcting LNA/CALTONE for band={freq_band} and pol={txrx_pol}')
         fc_a, _, _, _ = raw.getChirpParameters('A', txrx_pol[0])
@@ -382,7 +384,8 @@ def _get_qfsp_delay_anomaly(
         1-D array of complex LNA/CALTONE ratio with size equals
         to the number of RX channels
     dif_chirp_caltone_freq: float
-        Frequency difference between chirp and caltone in Hz.
+        Frequency difference between chirp and caltone (chirp - caltone)
+        in Hz.
     adc_clock : float, default=240e6
         Analogue-to-digital (ADC) clock rate of NISAR in Hz.
 
