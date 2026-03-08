@@ -414,7 +414,12 @@ def _get_qfsp_delay_anomaly(
         phs_ref = np.median(qfps_phs)
         # phase due to ADC delay
         phs_adc_delay = 2 * np.pi * dif_chirp_caltone_freq / adc_clock
-        n_delay_qfsp = np.round((qfps_phs - phs_ref) / phs_adc_delay)
+        if np.isclose(phs_adc_delay, 0):
+            warn('Caltone and chirp center frequency is the same. This '
+                 'can lead to no qFSP delay anomaly detection if any!')
+            n_delay_qfsp = np.zeros_like(qfps_phs)
+        else:
+            n_delay_qfsp = np.round((qfps_phs - phs_ref) / phs_adc_delay)
         # now repeat sample delay 4x per qFSP
         n_delays = np.repeat(
             n_delay_qfsp[:, np.newaxis], repeats=4, axis=1).ravel()
