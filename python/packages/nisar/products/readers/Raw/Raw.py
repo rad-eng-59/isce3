@@ -1108,7 +1108,7 @@ class PolarizationTypeId(IntEnum):
 
 # helper functions that uses Raw as input
 
-def polarization_type_from_drt(raw: Raw) -> PolarizationTypeId:
+def polarization_type_from_drt(raw: Raw) -> PolarizationTypeId | None:
     """
     Get polarization ID and type from L0B DRT
 
@@ -1119,8 +1119,9 @@ def polarization_type_from_drt(raw: Raw) -> PolarizationTypeId:
 
     Returns
     --------
-    nisar.products.readers.Raw.PolarizationTypeId
+    nisar.products.readers.Raw.PolarizationTypeId or None
         An enumeration for various polarimetric modes of L-band NISAR.
+        None if the respective field is missing in the L0B product.
 
     """
     pol_path = f'{raw.TelemetryPath}/DRT/MISC/CP_IFSW_POLARIZATION'
@@ -1129,7 +1130,7 @@ def polarization_type_from_drt(raw: Raw) -> PolarizationTypeId:
             ds_pol = f5[pol_path]
         except KeyError:
             warn(f'Missing dataset "{pol_path}" in "{raw.filename}"')
-            return PolarizationTypeId.none
+            return None
         else:
             i_pol = ds_pol[()]
             id_pol = np.nanmedian(i_pol)
