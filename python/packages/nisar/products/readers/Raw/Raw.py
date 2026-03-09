@@ -1108,9 +1108,9 @@ class PolarizationTypeId(IntEnum):
 
 # helper functions that uses Raw as input
 
-def polarization_type_from_drt(raw: Raw) -> PolarizationTypeId | None:
+def polarization_type_from_raw(raw: Raw) -> PolarizationTypeId | None:
     """
-    Get polarization ID and type from L0B DRT
+    Get polarization ID and type from L0B DRT if exists.
 
     Parameters
     ----------
@@ -1153,7 +1153,7 @@ def is_raw_quad_pol(raw: Raw) -> bool:
         True if the L0B product is quad pol otherwise False.
 
     """
-    return polarization_type_from_drt(raw) == PolarizationTypeId.quad
+    return polarization_type_from_raw(raw) == PolarizationTypeId.quad
 
 
 def first_tx_pol_for_quad(raw: Raw) -> str:
