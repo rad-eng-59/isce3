@@ -405,7 +405,7 @@ class RawBase(Base, family='nisar.productreader.raw'):
 
     def _parse_chirpcorrelator_from_hrt_qfsp(
             self,
-            txrx_pol: str) -> np.ndarray | None:
+            txrx_pol: str) -> np.ndarray:
         """
         Parse three-tap chirp correlator array with shape (lines, 12, 3)
         as well as cal type with shape (lines,) from high-rate-telemetry
@@ -418,9 +418,13 @@ class RawBase(Base, family='nisar.productreader.raw'):
 
         Returns
         -------
-        np.ndarray(complex) or None
+        np.ndarray(complex)
             3-D complex array of chirp correlator with shape (Lines, channels, 3)
-            If the field does not exist, None will be returned.
+
+        Raises
+        ------
+        KeyError
+            Missing respective dataset in L0B
 
         See Also
         --------
@@ -463,7 +467,7 @@ class RawBase(Base, family='nisar.productreader.raw'):
                                 f'Missing dataset {p_ds_i} in {self.filename}.'
                                 f' Detailed error -> {err}'
                             )
-                            return None
+                            raise
                         else:
                             # initialize the 3-D array, lines by 12 by 3
                             if i_qfsp == nn == i_tap == 0:
@@ -477,7 +481,7 @@ class RawBase(Base, family='nisar.productreader.raw'):
 
     def _parse_caltype_from_hrt_qfsp(
             self,
-            txrx_pol: str) -> np.ndarray | None:
+            txrx_pol: str) -> np.ndarray:
         """
         Parse cal-path types with shape (lines,) from high-rate telemetry
         (HRT) quadrature first-stage processor (QFSP).
@@ -491,7 +495,12 @@ class RawBase(Base, family='nisar.productreader.raw'):
         -------
         np.ndarray(uint8) or None
             1-D array of cal type w/ values HPA=0, LNA=1, BYPASS=2, and
-            INVALID=255. If the field does not exist None will be returned.
+            INVALID=255.
+
+        Raises
+        ------
+        KeyError
+            Missing respective dataset in L0B
 
         See Also
         --------
@@ -520,17 +529,17 @@ class RawBase(Base, family='nisar.productreader.raw'):
             except KeyError as err:
                 warn(f'Missing dataset "{p_type}" in '
                     f'"{self.filename}". Detailed error -> {err}')
-                return None
+                raise
             else:
                 return ds_cal_type[()].astype(CalPath)
 
 
     def _parse_rangeline_index_from_hrt(
             self,
-            txrx_pol: str = None) -> np.ndarray | None:
+            txrx_pol: str = None) -> np.ndarray:
         """
         Get range line index over all range lines from
-        HRT if exists otherwise None!
+        HRT.
 
         Parameters
         ----------
@@ -541,6 +550,11 @@ class RawBase(Base, family='nisar.productreader.raw'):
         -------
         np.ndarray(uint) or None
             If not available in L0b, None will be returned.
+
+        Raises
+        ------
+        KeyError
+            Missing respective dataset in L0B
 
         """
         hrt_path = self.TelemetryPath.replace('low', 'high')
@@ -557,7 +571,7 @@ class RawBase(Base, family='nisar.productreader.raw'):
                 ds_rgl_idx = f5[rgl_idx_path]
             except KeyError as err:
                 warn(f'Can not parse range line index from HRT. Error -> {err}')
-                return None
+                raise
             else:
                 return ds_rgl_idx[()]
 
@@ -1108,9 +1122,9 @@ class PolarizationTypeId(IntEnum):
 
 # helper functions that uses Raw as input
 
-def polarization_type_from_raw(raw: Raw) -> PolarizationTypeId | None:
+def polarization_type_from_raw(raw: Raw) -> PolarizationTypeId:
     """
-    Get polarization ID and type from L0B DRT if exists.
+    Get polarization ID and type from L0B DRT.
 
     Parameters
     ----------
@@ -1119,18 +1133,23 @@ def polarization_type_from_raw(raw: Raw) -> PolarizationTypeId | None:
 
     Returns
     --------
-    nisar.products.readers.Raw.PolarizationTypeId or None
+    nisar.products.readers.Raw.PolarizationTypeId
         An enumeration for various polarimetric modes of L-band NISAR.
-        None if the respective field is missing in the L0B product.
+
+    Raises
+    ------
+    KeyError
+        Missing respective polarization type dataset in L0B
 
     """
     pol_path = f'{raw.TelemetryPath}/DRT/MISC/CP_IFSW_POLARIZATION'
     with h5py.File(raw.filename, mode='r', swmr=True) as f5:
         try:
             ds_pol = f5[pol_path]
-        except KeyError:
-            warn(f'Missing dataset "{pol_path}" in "{raw.filename}"')
-            return None
+        except KeyError as err:
+            warn(f'Missing dataset "{pol_path}" in "{raw.filename}". '
+                 'Detailed err -> {err}.')
+            raise
         else:
             i_pol = ds_pol[()]
             id_pol = np.nanmedian(i_pol)
@@ -1152,8 +1171,30 @@ def is_raw_quad_pol(raw: Raw) -> bool:
     bool
         True if the L0B product is quad pol otherwise False.
 
+    Notes
+    -----
+    If the polarization type is missing in the raw (KeyError),
+    It will issue a warning and return False.
+    This behaviour is needed for now to avoid failure in some ISCE3 test
+    cases due to simulated or old L0B products that do not contain
+    polarization type/id field! However, this is subject to change
+    in the future.
+
     """
-    return polarization_type_from_raw(raw) == PolarizationTypeId.quad
+    try:
+        pol_type = polarization_type_from_raw(raw)
+    except KeyError as err:
+        # XXX If the polarization type is missing in the raw (KeyError),
+        # It will issue a warning and return False.
+        # This behaviour is needed for now to avoid failure in some ISCE3 test
+        # cases due to simulated or old L0B products that do not contain
+        # polarization type/id field! However, this is subject to change
+        # in the future once some ISCE3 test files are updated!
+        warn(f'Polarization type is missing in L0B due to error "{err}". '
+             'Assumed NO quad pol! Outcome might be wrong!')
+        return False
+    else:
+        return pol_type == PolarizationTypeId.quad
 
 
 def first_tx_pol_for_quad(raw: Raw) -> str:
@@ -1174,6 +1215,9 @@ def first_tx_pol_for_quad(raw: Raw) -> str:
     ------
     ValueError
         If L0B product is not linear quad pol.
+    KeyError
+        If the polarization type dataset or range line index
+        is missing in L0B.
 
     Notes
     -----
@@ -1189,9 +1233,10 @@ def first_tx_pol_for_quad(raw: Raw) -> str:
     """
     if not is_raw_quad_pol(raw):
         raise ValueError('Not a quad pol!')
-    idx_rgl = raw._parse_rangeline_index_from_hrt()
-    # if not in HRT parse single-pol version from swath path
-    if idx_rgl is None:
+    try:
+        idx_rgl = raw._parse_rangeline_index_from_hrt()
+    except KeyError:
+        # if not in HRT parse single-pol version from swath path
         idx_rgl_h = raw.getRangeLineIndex('A', 'H')[0]
         idx_rgl_v = raw.getRangeLineIndex('A', 'V')[0]
         if idx_rgl_v < idx_rgl_h:
@@ -1251,11 +1296,12 @@ def chirpcorrelator_caltype_from_raw(
         1-D array of cal type w/ values HPA=0, LNA=1, BYPASS=2, and INVALID=255
 
     """
-    chp_cor = raw._parse_chirpcorrelator_from_hrt_qfsp(txrx_pol=txrx_pol)
-    cal_type = raw._parse_caltype_from_hrt_qfsp(txrx_pol=txrx_pol)
-    # XXX if the respective field does not exist then use co-pol under
-    # swath in L0B for the sake of backward compatibility
-    if chp_cor is None or cal_type is None:
+    try:
+        chp_cor = raw._parse_chirpcorrelator_from_hrt_qfsp(txrx_pol=txrx_pol)
+        cal_type = raw._parse_caltype_from_hrt_qfsp(txrx_pol=txrx_pol)
+    except KeyError:
+        # XXX if the respective field does not exist then use co-pol under
+        # swath in L0B for the sake of backward compatibility
         freq_band = [f for f in raw.frequencies if
                      txrx_pol in raw.polarizations[f]][0]
         chp_cor = raw.getChirpCorrelator(freq_band, txrx_pol[0])
