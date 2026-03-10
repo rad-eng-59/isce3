@@ -1174,7 +1174,8 @@ def is_raw_quad_pol(raw: Raw) -> bool:
     Notes
     -----
     If the polarization type is missing in the raw (KeyError),
-    It will issue a warning and return False.
+    It will issue a warning and check the polarizations under
+    the main frequency band.
     This behaviour is needed for now to avoid failure in some ISCE3 test
     cases due to simulated or old L0B products that do not contain
     polarization type/id field! However, this is subject to change
@@ -1185,14 +1186,19 @@ def is_raw_quad_pol(raw: Raw) -> bool:
         pol_type = polarization_type_from_raw(raw)
     except KeyError as err:
         # XXX If the polarization type is missing in the raw (KeyError),
-        # It will issue a warning and return False.
+        # It will issue a warning and check the polarizations under
+        # the main frequency band.
         # This behaviour is needed for now to avoid failure in some ISCE3 test
         # cases due to simulated or old L0B products that do not contain
         # polarization type/id field! However, this is subject to change
         # in the future once some ISCE3 test files are updated!
         warn(f'Polarization type is missing in L0B due to error "{err}". '
-             'Assumed NO quad pol! Outcome might be wrong!')
-        return False
+             'Check for polarizations under the main frequency band. '
+             'Outcome might be wrong!')
+        freq = np.sort(raw.frequencies)[0]
+        pols = raw.polarizations[freq]
+        tx_pol = pols[0][0]
+        return (len(pols) == 4 and tx_pol in ('H', 'V'))
     else:
         return pol_type == PolarizationTypeId.quad
 
