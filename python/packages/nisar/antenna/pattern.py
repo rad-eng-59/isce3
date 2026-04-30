@@ -114,7 +114,7 @@ class TimingFinder:
 
 
 def build_tx_trm(raw: Raw, pulse_times: np.ndarray, freq_band: str,
-                 tx_pol: str):
+                 tx_pol: str, remove_toggling: bool = False):
     """Build TxTrmInfo object """
     # Parse Tx-related Cal stuff used for Tx BMF
     tx_chanl = raw.getListOfTxTRMs(freq_band, tx_pol)
@@ -122,9 +122,40 @@ def build_tx_trm(raw: Raw, pulse_times: np.ndarray, freq_band: str,
     chp_corr, cal_type = chirpcorrelator_caltype_from_raw(
         raw, txrx_pol=2 * tx_pol)
     corr_tap2 = chp_corr[..., 1]
+    if remove_toggling:
+        warn('Remove TX toggling, if any, for the second tap HPA!')
+        from nisar.antenna import get_calib_range_line_idx
+        i_hpa, _, _, _ = get_calib_range_line_idx(cal_type)
+        hpa_mean = np.nanmedian(corr_tap2[i_hpa], axis=0)
+        corr_tap2[i_hpa] = hpa_mean
+    # get phase ramp to form TX phase
+    if tx_pol == 'H':
+        tx_phs = -np.deg2rad(
+            [81.,   47.,    2.,   14.,   22.,    0.,  -22.,  -38.,  -94., -120., -133., -161.]
+        )
+    elif tx_pol == 'V':
+        tx_phs = -np.deg2rad(
+            [65.,   36.,   50.,   28.,   -4.,    0.,  -26.,  -48., -123., -148., -143., -160.]
+        )
+    else:
+        tx_phs = None
+    if tx_phs is not None:
+        # either create a 2-D array
+        # tx_phs  = tx_phs[np.newaxis, :].repeat(repeats=corr_tap2.shape[0], axis=0)
+
+        # or remove the mean across range lines and than add desired mean
+        # tap2_phs = np.angle(corr_tap2)
+        # phs_mean = np.median(tap2_phs, axis=0)
+        # phs_dif = tx_phs - phs_mean
+        # print(f'Phase diff for {tx_pol}pol (deg) -> {np.round(np.rad2deg(phs_dif))}')
+        # tx_phs = tap2_phs + phs_dif
+
+        # no TX phase
+        tx_phs = None
+
     # build TxTRM  from Tx Cal stuff w/o optional "tx_phase"
     return TxTrmInfo(pulse_times, tx_chanl, corr_tap2,
-                     cal_type)
+                     cal_type, tx_phase=tx_phs)
 
 
 class AntennaPattern:
@@ -176,7 +207,8 @@ class AntennaPattern:
                  el_spacing_min=8.72665e-5,
                  freq_band=None,
                  caltone_freq=None,
-                 delay_ofs_dbf=-2.1474e-6):
+                 delay_ofs_dbf=-2.1474e-6,
+                 remove_toggling_tx=False):
 
         self.orbit = orbit.copy()
         self.attitude = attitude.copy()
@@ -184,6 +216,7 @@ class AntennaPattern:
         self.norm_weight = norm_weight
         self.el_spacing_min = el_spacing_min
         self.el_lut = el_lut
+        self.remove_toggling_tx = remove_toggling_tx
 
         # get frequency band
         freqs = np.sort(raw.frequencies)
@@ -327,7 +360,8 @@ class AntennaPattern:
             # pairings of freq band and TX pol.
             for tx_band, pols in raw.polarizations.items():
                 if tx_p in {pol[0] for pol in pols}:
-                    tx_trm = build_tx_trm(raw, self.pulse_times, tx_band, tx_p)
+                    tx_trm = build_tx_trm(raw, self.pulse_times, tx_band, tx_p,
+                                          remove_toggling=self.remove_toggling_tx)
                     break
             else:
                 assert False, f"couldn't find freq_id for tx_pol={tx_p}"
