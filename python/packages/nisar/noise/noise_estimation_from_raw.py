@@ -19,8 +19,7 @@ from isce3.core import DateTime, TimeDelta
 from nisar.products.readers.Raw import (
     chirpcorrelator_caltype_from_raw,
     is_raw_quad_pol,
-    first_tx_pol_for_quad,
-    opposite_linear_pol
+    first_tx_pol_for_quad
 )
 
 # Global Noise-related Constants
@@ -588,12 +587,12 @@ def est_noise_power_from_raw(
                 # calculate approximate ENBW for relatively white noise!
                 enbw = enbw_from_raw(raw, freq_band, txrx_pol[0])
                 logger.info(f'Approximate ENBW in (MHz) -> {enbw * 1e-6}')
-                # check if quad pol per telemetry then use the opposite
-                # TX pol for noise range lines if that pol is not the
-                # first TX pol.
+                # check if quad pol and the first TX pol is "H".
+                # Then use the opposite TX pol, "V", w/ the same RX pol
+                # for noise-only (sniffer) range lines!
                 txrx_p = txrx_pol
-                if is_quad_pol and txrx_pol[0] != first_tx_pol:
-                    txrx_p = opposite_linear_pol(txrx_pol[0]) + txrx_pol[1]
+                if is_quad_pol and txrx_pol[0] == 'H':
+                    txrx_p = 'V' + txrx_pol[1]
                     logger.warning(f'Use noise-only range lines from {txrx_p} '
                                    f'for {txrx_pol}!')
                 # parse one noise dataset
