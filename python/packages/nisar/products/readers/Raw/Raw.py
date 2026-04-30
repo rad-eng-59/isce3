@@ -1385,7 +1385,12 @@ def chirpcorrelator_caltype_from_raw(
         chp_cor = raw.getChirpCorrelator(freq_band, txrx_pol[0])
         cal_type = raw.getCalType(freq_band, txrx_pol[0])
         return chp_cor, cal_type
-    # Linear Quad pol case
+    # Linear Quad Pol (QP) case:
+    # TX Cal path type under HRT/QFSP is the same for all
+    # polarizations "txrx_pol". That is, no difference between
+    # H and V!
+    # Both cal type and chirp correlators under HRT/QFSP are
+    # provided over all TX pulses at fastest PRF clock!
     if is_raw_quad_pol(raw):
         tx_pol_first = first_tx_pol_for_quad(raw)
         # check input TX pol against first TX pol in
