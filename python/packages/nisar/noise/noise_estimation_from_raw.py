@@ -506,6 +506,7 @@ def est_noise_power_from_raw(
                 # loop over several AZ blocks of noise-only range lines
                 noise_power_azblk = []
                 az_dt_utc = []
+                ns_prod = None
                 for (dset_noise1, idx_rgl_ns), (dset_noise2, _) in zip(
                     extract_noise_only_lines(
                         raw, freq_band, txrx_pols[0], max_lines),
@@ -567,7 +568,8 @@ def est_noise_power_from_raw(
                         ns_prod.freq_band,
                         ns_prod.method
                     )
-                noise_prods.append(ns_prod)
+                if ns_prod is not None:
+                    noise_prods.append(ns_prod)
 
         else:  # no polarimetric diff!
             # For qaud pol, use noise range lines of the
@@ -599,6 +601,7 @@ def est_noise_power_from_raw(
                 # loop over several AZ blocks of noise-only range lines
                 noise_power_azblk = []
                 az_dt_utc = []
+                ns_prod = None
                 for (dset_noise, idx_rgl_ns) in extract_noise_only_lines(
                         raw, freq_band, txrx_p, max_lines):
                     if exclude_first_last:
@@ -650,7 +653,8 @@ def est_noise_power_from_raw(
                         ns_prod.freq_band,
                         ns_prod.method
                     )
-                noise_prods.append(ns_prod)
+                if ns_prod is not None:
+                    noise_prods.append(ns_prod)
 
     return noise_prods
 
