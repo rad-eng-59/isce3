@@ -21,8 +21,7 @@ from nisar.products.readers.Raw import (
     open_rrsd,
     chirpcorrelator_caltype_from_raw,
     is_raw_quad_pol,
-    first_tx_pol_for_quad,
-    opposite_linear_pol
+    first_tx_pol_for_quad
 )
 from nisar.products.readers.rslc_cal import (RslcCalibration,
     parse_rslc_calibration, get_scale_and_delay, check_cal_validity_dates)
@@ -1078,6 +1077,7 @@ def resample(raw: np.ndarray, t: np.ndarray,
 
 
 def process_rfi(cfg: Struct, raw_data: np.ndarray,
+                swaths: Optional[np.ndarray] = None,
                 tmpfile: Callable = lambda name: open(name, "wb")):
     """
     Run radio frequency interference (RFI) detection and mitigation as
@@ -1089,6 +1089,12 @@ def process_rfi(cfg: Struct, raw_data: np.ndarray,
         RSLC runconfig data
     raw_data : np.ndarray[np.complex64]
         Raw data layer.  May be modified in-place if mitigation is enabled.
+    swaths : np.ndarray [int], optional
+        Valid subswath samples, dims = (ns, nt, 2) where ns is the number of
+        sub-swaths, nt is the number of pulses, and the trailing dimension is
+        the [start, stop) indices of the sub-swath.  It's recommended to supply
+        this for modes with dithered PRI, where it will be used to normalize
+        the sample covariance matrix.
     tmpfile : Callable
         Function of a single string argument that returns an open file handle.
 
@@ -1120,6 +1126,8 @@ def process_rfi(cfg: Struct, raw_data: np.ndarray,
     # Mitigate in place unless user wants a debug file to compare raw and
     # mitigated data.  This means you'd need to run the workflow twice to find
     # a bug specific to in-place vs out-of-place processing.
+
+
     raw_data_mitigated = raw_data
     if opt.mitigation_enabled and not cfg.processing.delete_tempfiles:
         fd = tmpfile("_raw_clean.c8")
@@ -1143,7 +1151,12 @@ def process_rfi(cfg: Struct, raw_data: np.ndarray,
             use_entire_pulse=opt.use_entire_pulse,
             threshold_params=threshold_params,
             num_cpi_tb=opt_evd.num_cpi_per_threshold_block,
+            off_diag_overlap_ratio=opt_evd.off_diag_overlap_ratio,
+            diag_valid_ratio=opt_evd.diag_valid_ratio,
             mitigate_enable=opt.mitigation_enabled,
+            min_rank_frac=opt_evd.min_rank_frac,
+            rx_dynamic_range_db=opt_evd.rx_dynamic_range_db,
+            swaths=swaths,
             raw_data_mitigated=raw_data_mitigated)
     else:
         opt_fnf = opt.freq_notch_filter
@@ -1403,7 +1416,8 @@ def get_identification_data_from_runconfig(cfg: Struct) -> dict:
 def get_identification_data_from_raw(rawlist: list[Raw]) -> dict:
     """
     Populate a dict containing the keys
-        {"planned_datatake_id", "planned_observation_id", "is_urgent"}
+        {"planned_datatake_id", "planned_observation_id", "is_urgent",
+         "has_input_data_exception"}
     by combining the relevant identification metadata keys from all raw data
     files in the provided list.
     """
@@ -1416,7 +1430,9 @@ def get_identification_data_from_raw(rawlist: list[Raw]) -> dict:
         is_urgent = any(raw.identification.isUrgentObservation
             for raw in rawlist),
         is_joint = any(raw.identification.isJointObservation
-            for raw in rawlist)
+            for raw in rawlist),
+        has_input_data_exception = reduce(lambda a, b: a | b,
+            (raw.identification.hasInputDataException for raw in rawlist)),
     )
 
 
@@ -1713,6 +1729,25 @@ def focus(runconfig, runconfig_path=""):
                                        dem, get_rdr2geo_params(cfg))
     beta0_lut, sigma0_lut, gamma0_lut = make_cal_luts(inc_lut)
 
+    # Compute luts for zero-doppler (t,r) -> native-doppler (t,r)
+    reskew_grid = ref_grid.multilook(
+            cfg.processing.lookup_tables.downsampling_factor.azimuth,
+            cfg.processing.lookup_tables.downsampling_factor.range
+        ).add_margin(
+            cfg.processing.lookup_tables.margin_in_pixels.azimuth,
+            cfg.processing.lookup_tables.margin_in_pixels.range
+        )
+    log.info(f"Computing reskew look-up-tables with shape={reskew_grid.shape}")
+    tn_lut, rn_lut = isce3.geometry.make_reskew_lut(
+        reskew_grid.sensing_times, reskew_grid.slant_ranges, orbit, side,
+        zerodop, wvl_ref, dem=dem, doppler_out=dop_ref,
+        rdr2geo_params=get_rdr2geo_params(cfg),
+        geo2rdr_params=get_geo2rdr_params(cfg))
+
+    anomaly_code = reduce(lambda a, b: a | b,
+        (raw.identification.hasInputDataException for raw in rawlist))
+    log.info(f"Data anomaly code = {anomaly_code}")
+
     # Frequency A/B specific setup for output grid, doppler, and blocks.
     ogrid, dop, blocks_bounds, areas = dict(), dict(), dict(), dict()
     for frequency, band in get_bands(common_mode).items():
@@ -1836,6 +1871,19 @@ def focus(runconfig, runconfig_path=""):
                                         extended_radar_grid.slant_ranges,
                                         beta0_lut, sigma0_lut, gamma0_lut)
 
+        # Set anomaly mask. Need to do some geometry.
+        opts = get_dataset_creation_options(cfg, og.shape)
+        del opts["dtype"]
+        mask = slc.create_anomaly_mask(frequency, shape=og.shape, **opts)
+        if instparser is not None:
+            log.info(f"Writing inputDataExceptionMask for frequency{frequency}")
+            nisar.cal.qfsp_slip.write_anomaly_mask(anomaly_code, mask,
+                og.sensing_times, og.slant_ranges, tn_lut, rn_lut, el_lut,
+                instparser)
+        else:
+            log.warning("Internal calibration (INT_CAL) file was not provided "
+                "so unable to populate inputDataExceptionMask")
+
     freq = next(iter(get_bands(common_mode)))
     slc.set_geolocation_grid(orbit, ogrid[freq], dop[freq],
                              epsg=cfg.processing.metadata_cube_epsg, dem=dem,
@@ -1949,12 +1997,18 @@ def focus(runconfig, runconfig_path=""):
                         z[k] = wavelets.remove_tone(z[k])
                 raw_mm[block_out] = z
 
-            raw_clean, rfi_likelihood = process_rfi(cfg, raw_mm, temp)
+            uniform_pri = not raw.isDithered(channel_in.freq_id)
+
+            raw_clean, rfi_likelihood = process_rfi(
+                cfg, 
+                raw_mm, 
+                None if uniform_pri else swaths,
+                temp
+            )
             rfi_results[(frequency, pol)].append(
                 (rfi_likelihood, raw_clean.shape[0]))
             del raw_mm, rawfd
 
-            uniform_pri = not raw.isDithered(channel_in.freq_id)
             if uniform_pri:
                 log.info("Uniform PRF, using raw data directly.")
                 regridded, regridfd = raw_clean, None
@@ -2031,7 +2085,7 @@ def focus(runconfig, runconfig_path=""):
                     'interval. Skip noise estimation and set noise equivalent '
                     'backscatter to zero.')
                 pow_noise = np.zeros_like(sr_noise, dtype='f4')
-            else: # there is at least one noise-only range line
+            else:  # there is at least one noise-only range line
                 nrgl_noise = idx_noise.size
                 log.info(f'Number of noise-only range lines is {nrgl_noise}')
                 # create a dedicated memory map for noise data and processing.
@@ -2040,17 +2094,17 @@ def focus(runconfig, runconfig_path=""):
                 data_noise = np.memmap(
                     fid_noise, mode='w+', shape=(nrgl_noise, rc.output_size),
                     dtype=np.complex64)
-                # Check if raw is quad pol and the TX pol is not the
-                # first TX pol. Then extract noise only range line
-                # from the opposite TX pol w/ the same RX pol.
+                # Check if raw is quad pol and the TX pol is "H".
+                # Then extract noise-only (sniffer) range lines
+                # from the opposite TX pol, "V", w/ the same RX pol.
                 # XXX No RFI/caltone clean up of noise-only range lines
                 # for second TX pol products of quad pol!
                 raw_ns = np.copy(raw_clean[idx_noise])
                 if is_raw_quad_pol(raw):
                     first_tx_pol = first_tx_pol_for_quad(raw)
                     log.info(f'Quad pol w/ first {first_tx_pol} pol!')
-                    if pol[0] != first_tx_pol:
-                        pol_ns = opposite_linear_pol(pol[0]) + pol[1]
+                    if pol[0] == 'H':
+                        pol_ns = 'V' + pol[1]
                         log.warning('Get noise-only range lines from '
                                     f'{pol_ns} for {pol} of quad pol!')
                         ds_ns = raw.getRawDataset(channel_in.freq_id, pol_ns)
