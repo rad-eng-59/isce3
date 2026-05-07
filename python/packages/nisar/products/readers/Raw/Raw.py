@@ -1373,6 +1373,14 @@ def chirpcorrelator_caltype_from_raw(
     np.ndarray(uint8)
         1-D array of cal type w/ values HPA=0, LNA=1, BYPASS=2, and INVALID=255
 
+    Notes
+    -----
+    Assumptions for NISAR L-band products in regards
+    to sniffer (BYPASS/LNA) pulses:
+    - The first TX pulse in any datatake is sniffer pulse (BYPASS).
+    - The period of sniffer pulse is always an even number!
+    - The tx=V on odd TX pulses while tx=H on even ones in Quad pol.
+
     """
     try:
         chp_cor = raw._parse_chirpcorrelator_from_hrt_qfsp(txrx_pol=txrx_pol)
@@ -1394,7 +1402,8 @@ def chirpcorrelator_caltype_from_raw(
     if is_raw_quad_pol(raw):
         tx_pol_first = first_tx_pol_for_quad(raw)
         # check input TX pol against first TX pol in
-        # linear QP to get proper indexing in HRT.
+        # linear QP to get proper single-pol indexing (slow PRF)
+        # from fast indexing (fast PRF) of HRT.
         if tx_pol_first == txrx_pol[0]:
             first_slice = np.s_[::2]
             second_slice = np.s_[1::2]
@@ -1409,10 +1418,14 @@ def chirpcorrelator_caltype_from_raw(
         else:
             # TX = H pol that requires special
             # treatment for sniffer pulses (LNA/BYPASS)!
-            # get sniffer pulses from the opposite TX but same receive!
+            # get sniffer pulses from the opposite TX
+            # (other pulse indices) but same receive
+            # to update chirp correlator and cal type.
             cal_type_x = cal_type[second_slice]
             chp_cor_x = chp_cor[second_slice]
             _, idx_byp, idx_lna, _ = get_calib_range_line_idx(cal_type_x)
+            # Parse and update the chirp correlator and cal
+            # type for BYPASS/LNA (sniffer pulses)
             chp_cor = chp_cor[first_slice]
             cal_type = cal_type[first_slice]
             chp_cor[idx_byp] = chp_cor_x[idx_byp]
