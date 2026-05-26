@@ -431,7 +431,7 @@ class AntennaPattern:
             # RX imbalance (LNA/CALTONE) and secondary correction from
             # input INST HDF5 product
             channel_adj_fact_rx = (
-                self.rx_imb[self.freq_band, txrx_pol].lna_caltone_ratio)
+                self.rx_imb[self.freq_band, txrx_pol].lna_caltone_ratio.copy())
             if self.channel_adj_fact_rx[rxp] is not None:
                 channel_adj_fact_rx *= np.asarray(
                     self.channel_adj_fact_rx[rxp])
