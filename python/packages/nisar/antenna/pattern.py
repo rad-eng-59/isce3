@@ -158,6 +158,16 @@ def build_tx_trm(raw: Raw, pulse_times: np.ndarray, freq_band: str,
                      cal_type, tx_phase=tx_phs)
 
 
+def _pulse_ext_from_raw(raw: Raw) -> float:
+    """Get pulse extension which is total pulsewidth for split spectrum"""
+    pw_ext = 0
+    for freq_band in raw.frequencies:
+        txrx_pol = sorted(raw.polarizations[freq_band])[0]
+        fc, _, _, pw = raw.getChirpParameters(freq_band, txrx_pol[0])
+        pw_ext += pw
+    return pw_ext
+
+
 class AntennaPattern:
     """
     Convenience class for generating combined TX*RX elevation pattern for
@@ -217,6 +227,7 @@ class AntennaPattern:
         self.el_spacing_min = el_spacing_min
         self.el_lut = el_lut
         self.remove_toggling_tx = remove_toggling_tx
+        self.pw_ext = _pulse_ext_from_raw(raw)
 
         # get frequency band
         freqs = np.sort(raw.frequencies)
@@ -336,6 +347,7 @@ class AntennaPattern:
                     el_lut=self.el_lut,
                     norm_weight=self.norm_weight,
                     el_spacing_min=self.el_spacing_min,
+                    pulse_ext=self.pw_ext
                 )
                 self.rg_spacing_min = self.rx_dbf[rx_p].rg_spacing_min
             else:
@@ -345,6 +357,7 @@ class AntennaPattern:
                     el_lut=self.el_lut,
                     norm_weight=self.norm_weight,
                     rg_spacing_min=self.rg_spacing_min,
+                    pulse_ext=self.pw_ext
                 )
 
         # build all TxBMFs for all possible TX linear polarizations
@@ -462,7 +475,8 @@ class AntennaPattern:
                     self.orbit, self.attitude, self.dem, self.el_pat_rx[rxp],
                     self.rx_trm[rxp], self.reference_epoch,
                     el_lut=self.el_lut,
-                    norm_weight=self.rx_dbf[rxp].norm_weight)
+                    norm_weight=self.rx_dbf[rxp].norm_weight,
+                    pulse_ext=self.pw_ext)
 
                 pat = self.rx_dbf[rxp].form_pattern(
                     tgroup, slant_range,
