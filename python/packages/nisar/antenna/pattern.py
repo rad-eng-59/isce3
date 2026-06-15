@@ -163,7 +163,7 @@ def _pulse_ext_from_raw(raw: Raw) -> float:
     pw_ext = 0
     for freq_band in raw.frequencies:
         txrx_pol = sorted(raw.polarizations[freq_band])[0]
-        fc, _, _, pw = raw.getChirpParameters(freq_band, txrx_pol[0])
+        _, _, _, pw = raw.getChirpParameters(freq_band, txrx_pol[0])
         pw_ext += pw
     return pw_ext
 
