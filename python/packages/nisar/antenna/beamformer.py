@@ -726,8 +726,8 @@ class RxDBF(ElevationBeamformer):
                     # Apply pulse ext if any
                     if self._size_rect > 1:
                         el_pw_ext = self.el_lut.eval(tm, sr_pw_ext)
-                        gd_el_ext = self.el_lut.eval(tm,
-                                                     sr_pw_ext[0] + gd_sr_ext)
+                        gd_el_ext = self.el_lut.eval(
+                            tm, sr_pw_ext[0] + gd_sr_ext) - el_pw_ext[0]
                         for cc in range(num_active_chanl):
                             ant_pat_el_pw[cc] = np.interp(
                                 el_pw_ext,
