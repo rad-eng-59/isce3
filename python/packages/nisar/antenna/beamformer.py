@@ -719,7 +719,7 @@ class RxDBF(ElevationBeamformer):
                     # form RX DBF pattern
                     for cc in range(num_active_chanl):
                         x += np.interp(
-                            sr, sr_pw_ext + gd_sr_ext, ant_pat_el_pw[cc, :]
+                            sr, sr_pw_ext - gd_sr_ext, ant_pat_el_pw[cc, :]
                             ) * rx_wgt[cc, :]
                 else:
                     sr_angles = self.el_lut.eval(tm, sr)
@@ -743,7 +743,7 @@ class RxDBF(ElevationBeamformer):
                         gd_el_ext = 0.0
                     # form RX DBF pattern
                     for cc in range(num_active_chanl):
-                        x += np.interp(sr_angles, el_pw_ext + gd_el_ext,
+                        x += np.interp(sr_angles, el_pw_ext - gd_el_ext,
                                        ant_pat_el_pw[cc, :]) * rx_wgt[cc, :]
 
                 rx_pat[pp] = x.repeat(nrgb_skip)[:slant_range.size]
