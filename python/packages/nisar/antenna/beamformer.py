@@ -679,6 +679,7 @@ class RxDBF(ElevationBeamformer):
         # form uniform coarse slant range vector used in pulse ext if any
         if self._size_rect > 1:
             # preserve exactly the same coarse spacing in slant range!
+            gd_sr_ext = 0.5 * self._size_rect * self._rg_space_rect
             sr_first = sr[0] - self._size_rect * self._rg_space_rect
             sr_last = sr[-1] + self._rg_space_rect
             size_sr_pw_ext = round(
@@ -714,16 +715,19 @@ class RxDBF(ElevationBeamformer):
                     else:  # no pulse ext
                         ant_pat_el_pw = ant_pat_el
                         sr_pw_ext = sr_ant
+                        gd_sr_ext = 0.0
                     # form RX DBF pattern
                     for cc in range(num_active_chanl):
                         x += np.interp(
-                            sr, sr_pw_ext, ant_pat_el_pw[cc, :]
+                            sr, sr_pw_ext + gd_sr_ext, ant_pat_el_pw[cc, :]
                             ) * rx_wgt[cc, :]
                 else:
                     sr_angles = self.el_lut.eval(tm, sr)
                     # Apply pulse ext if any
                     if self._size_rect > 1:
                         el_pw_ext = self.el_lut.eval(tm, sr_pw_ext)
+                        gd_el_ext = self.el_lut.eval(tm,
+                                                     sr_pw_ext[0] + gd_sr_ext)
                         for cc in range(num_active_chanl):
                             ant_pat_el_pw[cc] = np.interp(
                                 el_pw_ext,
@@ -736,9 +740,10 @@ class RxDBF(ElevationBeamformer):
                     else:  # no pulse ext
                         ant_pat_el_pw = ant_pat_el
                         el_pw_ext = self.el_ant_info.angle
+                        gd_el_ext = 0.0
                     # form RX DBF pattern
                     for cc in range(num_active_chanl):
-                        x += np.interp(sr_angles, el_pw_ext,
+                        x += np.interp(sr_angles, el_pw_ext + gd_el_ext,
                                        ant_pat_el_pw[cc, :]) * rx_wgt[cc, :]
 
                 rx_pat[pp] = x.repeat(nrgb_skip)[:slant_range.size]
