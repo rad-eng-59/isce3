@@ -689,8 +689,7 @@ class RxDBF(ElevationBeamformer):
             ant_pat_el_pw = np.zeros(
                 (num_active_chanl, size_sr_pw_ext), dtype=ant_pat_el.dtype)
             rect_ext = 1. / self._size_rect * np.ones((1, self._size_rect))
-            slice_ext = np.s_[
-                self._size_rect // 2:size_sr_pw_ext + self._size_rect // 2]
+            slice_ext = np.s_[0:size_sr_pw_ext]
 
         # loop over pulses
         for pp, tm in enumerate(pulse_time):
