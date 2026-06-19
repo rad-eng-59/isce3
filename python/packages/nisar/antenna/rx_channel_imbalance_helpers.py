@@ -168,8 +168,20 @@ def compute_rx_channel_imbalance(
         txrx_pol,
         caltone_freq=caltone_freq
     )
-    # peak normalized
-    max_ratio = np.nanmax(abs(lna_caltone_ratio))
+    # compute complex caltone offset from the mean caltone
+    # over all active RX channels. This is used to remove
+    # phase/amplitude jumps due to WG reset over time, mode
+    # changes where pulsewidth varies, and finally due to
+    # change in caltone location onboard!
+    idx_rxs_active = raw.getListOfRxTRMs(freq_band, txrx_pol) - 1
+    caltone_ofs = np.nanmean(caltone_mean[idx_rxs_active])
+    # Use constant scalar, e.g., 1945, to scale the Caltone offset.
+    # This is to preserve the current abscal. (optional)
+    # This offset is obtained from the median over several
+    # observations/modes that have the same caltone frequency!
+    caltone_ofs /= 1945.0
+    # peak normalized and apply complex offset
+    max_ratio = caltone_ofs * np.nanmax(abs(lna_caltone_ratio))
     if not np.isclose(max_ratio, 0):
         lna_caltone_ratio /= max_ratio
     return lna_caltone_ratio, n_tap_dominant, time_delays, max_ratio
