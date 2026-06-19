@@ -1,4 +1,3 @@
-from warnings import warn
 from collections import defaultdict
 from isce3.core import Orbit, Attitude, Linspace
 from isce3.geometry import DEMInterpolator
@@ -115,16 +114,59 @@ class TimingFinder:
 
 def build_tx_trm(raw: Raw, pulse_times: np.ndarray, freq_band: str,
                  tx_pol: str):
-    """Build TxTrmInfo object """
+    """Build TxTrmInfo object
+
+    Parameters
+    ----------
+    raw : nisar.products.readers.raw.Raw
+        Raw L0B product parser.
+    pulse_times : np.ndarray(float)
+        Pulse times in seconds
+    freq_band : str
+        frequency band, 'A' or 'B'.
+    tx_pol : str
+        Transmit polarization such 'H', 'V', etc
+
+    Returns
+    -------
+    TxTrmInfo
+        data class for all key calibration info on TX modules.
+
+    """
     # Parse Tx-related Cal stuff used for Tx BMF
     tx_chanl = raw.getListOfTxTRMs(freq_band, tx_pol)
     # get chirp correlator and cal type for co-pol product
     chp_corr, cal_type = chirpcorrelator_caltype_from_raw(
         raw, txrx_pol=2 * tx_pol)
     corr_tap2 = chp_corr[..., 1]
+
     # build TxTRM  from Tx Cal stuff w/o optional "tx_phase"
     return TxTrmInfo(pulse_times, tx_chanl, corr_tap2,
                      cal_type)
+
+
+def pulse_ext_from_raw(raw: Raw) -> float:
+    """
+    Get pulse extension which is total duration of
+    sequentially transmitted chirps.
+
+    Parameters
+    ----------
+    raw : nisar.products.readers.raw.Raw
+        Raw L0B product parser.
+
+    Returns
+    -------
+    float
+        Total pulse width in seconds transmitted sequentially.
+
+    """
+    pw_ext = 0
+    for freq_band in raw.frequencies:
+        txrx_pol = sorted(raw.polarizations[freq_band])[0]
+        _, _, _, pw = raw.getChirpParameters(freq_band, txrx_pol[0])
+        pw_ext += pw
+    return pw_ext
 
 
 class AntennaPattern:
@@ -184,6 +226,7 @@ class AntennaPattern:
         self.norm_weight = norm_weight
         self.el_spacing_min = el_spacing_min
         self.el_lut = el_lut
+        self.pw_ext = pulse_ext_from_raw(raw)
 
         # get frequency band
         freqs = np.sort(raw.frequencies)
@@ -303,6 +346,7 @@ class AntennaPattern:
                     el_lut=self.el_lut,
                     norm_weight=self.norm_weight,
                     el_spacing_min=self.el_spacing_min,
+                    pulse_ext=self.pw_ext
                 )
                 self.rg_spacing_min = self.rx_dbf[rx_p].rg_spacing_min
             else:
@@ -312,6 +356,7 @@ class AntennaPattern:
                     el_lut=self.el_lut,
                     norm_weight=self.norm_weight,
                     rg_spacing_min=self.rg_spacing_min,
+                    pulse_ext=self.pw_ext
                 )
 
         # build all TxBMFs for all possible TX linear polarizations
@@ -327,7 +372,8 @@ class AntennaPattern:
             # pairings of freq band and TX pol.
             for tx_band, pols in raw.polarizations.items():
                 if tx_p in {pol[0] for pol in pols}:
-                    tx_trm = build_tx_trm(raw, self.pulse_times, tx_band, tx_p)
+                    tx_trm = build_tx_trm(
+                        raw, self.pulse_times, tx_band, tx_p)
                     break
             else:
                 assert False, f"couldn't find freq_id for tx_pol={tx_p}"
@@ -428,7 +474,8 @@ class AntennaPattern:
                     self.orbit, self.attitude, self.dem, self.el_pat_rx[rxp],
                     self.rx_trm[rxp], self.reference_epoch,
                     el_lut=self.el_lut,
-                    norm_weight=self.rx_dbf[rxp].norm_weight)
+                    norm_weight=self.rx_dbf[rxp].norm_weight,
+                    pulse_ext=self.pw_ext)
 
                 pat = self.rx_dbf[rxp].form_pattern(
                     tgroup, slant_range,
