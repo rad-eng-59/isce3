@@ -146,7 +146,7 @@ def build_tx_trm(raw: Raw, pulse_times: np.ndarray, freq_band: str,
         warn('Remove TX toggling, if any, for the second tap HPA!')
         from nisar.antenna import get_calib_range_line_idx
         i_hpa, _, _, _ = get_calib_range_line_idx(cal_type)
-        hpa_mean = np.nanmedian(corr_tap2[i_hpa], axis=0)
+        hpa_mean = np.nanmean(corr_tap2[i_hpa], axis=0)
         corr_tap2[i_hpa] = hpa_mean
 
     # build TxTRM  from Tx Cal stuff w/o optional "tx_phase"
