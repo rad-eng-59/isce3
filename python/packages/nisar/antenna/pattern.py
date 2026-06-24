@@ -123,7 +123,7 @@ def build_tx_trm(raw: Raw, pulse_times: np.ndarray, freq_band: str,
         raw, txrx_pol=2 * tx_pol)
     corr_tap2 = chp_corr[..., 1]
     if remove_toggling:
-        warn('Remove TX toggling, if any, for the second tap HPA!')
+        log.warning('Remove TX toggling, if any, for the second tap HPA!')
         from nisar.antenna import get_calib_range_line_idx
         i_hpa, _, _, _ = get_calib_range_line_idx(cal_type)
         hpa_mean = np.nanmean(corr_tap2[i_hpa], axis=0)
@@ -233,7 +233,7 @@ class AntennaPattern:
         if apply_pulse_ext:
             self.pw_ext = _pulse_ext_from_raw(raw)
         else:
-            warn('No pulse ext will be applied')
+            log.warning('No pulse ext will be applied')
             self.pw_ext = None
 
         # get frequency band
