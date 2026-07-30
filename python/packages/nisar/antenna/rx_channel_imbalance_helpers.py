@@ -174,14 +174,25 @@ def compute_rx_channel_imbalance(
     # changes where pulsewidth varies, and finally due to
     # change in caltone location onboard!
     idx_rxs_active = raw.getListOfRxTRMs(freq_band, txrx_pol) - 1
-    caltone_ofs = np.nanmean(caltone_mean[idx_rxs_active])
-    # Use constant scalar, e.g., 1945, to scale the Caltone offset.
-    # This is to preserve the current abscal. (optional)
-    # This offset is obtained from the median over several
-    # observations/modes that have the same caltone frequency!
-    caltone_ofs /= 1945.0
-    # peak normalized and apply complex offset
-    max_ratio = caltone_ofs * np.nanmax(abs(lna_caltone_ratio))
+    caltone_ofs_mag = np.sqrt(np.nanmean(
+        np.abs(caltone_mean[idx_rxs_active]) ** 2
+    ))
+    # form complex scalar offset whose magnitude comes from caltone
+    # averaged power among all active channels while its phase is computed
+    # from average phase of LNA among all channels.
+    # Normalized caltone magnitude by the nominal value obtained from
+    # HRT of several products, e.g., 1945 to avoid big changes in
+    # already-computed abscal.
+    # Note that LNA and Caltone share the same path but at different
+    # frequency!
+    # One can use BYPASS cal for phase offset instead of LNA one to capture
+    # phase jumps due to waveform generator reset.
+    lna_ofs_phs = np.nanmean(
+        np.unwrap(np.angle(lna_mean[idx_rxs_active]))
+    )
+    scalar_ofs = (caltone_ofs_mag / 1945.0) * np.exp(1j * lna_ofs_phs)
+    # peak normalized and apply complex scalar offset
+    max_ratio = scalar_ofs * np.nanmax(abs(lna_caltone_ratio))
     if not np.isclose(max_ratio, 0):
         lna_caltone_ratio /= max_ratio
     return lna_caltone_ratio, n_tap_dominant, time_delays, max_ratio
