@@ -1710,7 +1710,7 @@ def get_focused_sub_swaths(rawlist, out_chan, grid, orbit, doppler, dem, azres,
 def get_caltone_frequency(cfg, raw, pol):
     """
     Get Caltone frequency either from RSLC runconfig or from
-    parsing it from raw L0B low-rate telemerty (DRT).
+    parsing it from raw L0B low-rate telemetry (DRT).
 
     Parameters
     ----------
