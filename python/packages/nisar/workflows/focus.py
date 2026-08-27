@@ -1707,7 +1707,7 @@ def get_focused_sub_swaths(rawlist, out_chan, grid, orbit, doppler, dem, azres,
     return swaths
 
 
-def get_caltone_frequency(cfg, raw, pol):
+def get_caltone_frequency(cfg, raw, pol, freq_lim=(1209e6, 1301e6)):
     """
     Get Caltone frequency either from RSLC runconfig or from
     parsing it from raw L0B low-rate telemetry (DRT).
@@ -1720,6 +1720,12 @@ def get_caltone_frequency(cfg, raw, pol):
         NISAR L0B product pareser object
     pol : str
         Tx-Rx polarization such as "HH", "HV", etc
+    freq_lim: tuple of (float, float) or None, default=(1209e6, 1301e6)
+        (min ,max) frequency limit (Hz) for the parsed Caltone from L0B.
+        If  not None and Caltone frequency is not provided in config `cfg`,
+        the parsed Caltone from L0B will be checked against
+        this range and if out of range, ValueError exception will be raised.
+        Default limit is based on NISAR L-band instrument!
 
     Returns
     -------
@@ -1734,6 +1740,12 @@ def get_caltone_frequency(cfg, raw, pol):
         name = os.path.basename(raw.filename)
         log.info(f'Caltone frequency parsed from raw L0B "{name}" '
                     f'is {caltone_freq * 1e-6} (MHz)')
+        if freq_lim is not None and (
+            caltone_freq < freq_lim[0] or caltone_freq > freq_lim[1]):
+            raise ValueError(
+                f'Caltone frequency {caltone_freq} (Hz) is out of range '
+                f'{freq_lim} (Hz)!'
+            )
     elif not np.isclose(caltone_freq, caltone_freq_raw, rtol=1e-6):
         log.warning(
             'Noticeable mismtach in Caltone frequency between user-provided '
