@@ -1008,7 +1008,7 @@ class RawBase(Base, family='nisar.productreader.raw'):
         return "L0B"
 
 
-    def getBasebandPhaseCorrection(self, frequency='A', polarization=None):
+    def getBasebandPhaseCorrection(self, frequency='A', polarization=None, az_slice=np.s_[:]):
         """
         Get the phasor needed to rotate the raw data to have a constant phase
         with respect to the transmit.  This is required for sensors like NISAR
@@ -1024,6 +1024,8 @@ class RawBase(Base, family='nisar.productreader.raw'):
         polarization : {'HH', 'HV', 'VH', 'VV', 'RH','RV', 'LH', 'LV'}, optional
             Transmit-Receive polarization. If not specified, the first
             polarization in the `frequency` band will be used.
+        az_slice : slice or numpy slice, optional
+            Default is all range lines.
 
         Returns
         -------
@@ -1045,7 +1047,11 @@ class RawBase(Base, family='nisar.productreader.raw'):
         with h5py.File(self.filename, 'r', libver='latest', swmr=True) as fid:
             group = fid[path_txrx]
             key = "basebandPhaseCorrection"
-            return group.get(key, np.ones(naz, np.complex64))[()]
+            try:
+                d = group[key][az_slice]
+            except KeyError:
+                d = np.ones((naz, 1), dtype=np.complex64)
+            return d
 
 
 # adapted from ReeUtilPy/REEout/AntPatAnalysis.py:getDCMant2sc
