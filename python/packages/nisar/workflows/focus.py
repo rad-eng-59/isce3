@@ -2254,7 +2254,9 @@ def focus(runconfig, runconfig_path=""):
                         # decode simply noise-only range lines and
                         # thus no need for memmap
                         raw_ns = ds_ns[idx_ns]
-                        raw_ns *= bb_phasor[idx_noise, np.newaxis]
+                        bb_phasor_ns = raw.getBasebandPhaseCorrection(
+                            channel_in.freq_id, pol, az_slice=np.s_[idx_noise])
+                        raw_ns *= bb_phasor_ns
                         raw_ns[np.isnan(raw_ns)] = 0.0
                         if cfg.processing.zero_fill_gaps:
                             fill_gaps(raw_ns, swaths[:, idx_noise, :], 0.0)
