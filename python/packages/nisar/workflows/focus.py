@@ -2093,7 +2093,6 @@ def focus(runconfig, runconfig_path=""):
 
             # Need to correct raw data to have constant phase wrt TX event.
             log.info("Will apply basebandPhaseCorrection to raw data")
-            bb_phasor = raw.getBasebandPhaseCorrection(channel_in.freq_id, pol)
 
             na = cfg.processing.rangecomp.block_size.azimuth
             nr = rawdata.shape[1]
@@ -2122,7 +2121,9 @@ def focus(runconfig, runconfig_path=""):
                 pulse_slice = slice(pulse, pulse + nblock)
                 block_in = np.s_[pulse_slice, :]
                 block_out = np.s_[i:i+nblock, :]
-                z = rawdata[block_in] * bb_phasor[pulse_slice, np.newaxis]
+                bb_phasor = raw.getBasebandPhaseCorrection(
+                    channel_in.freq_id, pol, az_slice=pulse_slice)
+                z = rawdata[block_in] * bb_phasor[:nblock]
                 # Remove NaNs.  TODO could incorporate into gap mask.
                 z[np.isnan(z)] = 0.0
                 if cfg.processing.zero_fill_gaps:
