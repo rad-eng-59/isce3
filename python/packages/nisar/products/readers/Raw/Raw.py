@@ -1049,6 +1049,8 @@ class RawBase(Base, family='nisar.productreader.raw'):
             key = "basebandPhaseCorrection"
             try:
                 d = group[key][az_slice]
+                if d.ndim == 1:
+                    d = d[:, np.newaxis]
             except KeyError:
                 d = np.ones((naz, 1), dtype=np.complex64)
             return d
