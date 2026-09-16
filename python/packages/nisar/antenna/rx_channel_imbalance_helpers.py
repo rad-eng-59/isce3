@@ -14,6 +14,12 @@ from nisar.antenna import get_calib_range_line_idx
 
 log = logging.getLogger("nisar.antenna.rx_channel_imbalance_helpers")
 
+# A constant used for normalizing magnitude of Caltone in function
+# "compute_rx_channel_imbalance". The value is obtained from H-pol HRT
+# of RCID=240 collected on 02/09/2026 to avoid noticeable change
+# in already-computed AbsCal.
+CALTONE_NORM = 2082.0
+
 
 @dataclass(frozen=True)
 class RxChannelImbalanceProduct:
@@ -168,29 +174,22 @@ def compute_rx_channel_imbalance(
         txrx_pol,
         caltone_freq=caltone_freq
     )
-    # compute complex caltone offset from the mean caltone
-    # over all active RX channels. This is used to remove
-    # phase/amplitude jumps due to WG reset over time, mode
-    # changes where pulsewidth varies, and finally due to
-    # change in caltone location onboard!
+    # Get active RX channel indicies
     idx_rxs_active = raw.getListOfRxTRMs(freq_band, txrx_pol) - 1
     caltone_ofs_mag = np.sqrt(np.nanmean(
         np.abs(caltone_mean[idx_rxs_active]) ** 2
     ))
-    # form complex scalar offset whose magnitude comes from caltone
+    # Form complex scalar offset whose magnitude comes from caltone
     # averaged power among all active channels while its phase is computed
     # from average phase of LNA among all channels.
-    # Normalized caltone magnitude by the nominal value obtained from
-    # HRT of several products, e.g., 1945 to avoid big changes in
-    # already-computed abscal.
-    # Note that LNA and Caltone share the same path but at different
+    # Note that LNA and Caltone share the same RF path but at different
     # frequency!
-    # One can use BYPASS cal for phase offset instead of LNA one to capture
-    # phase jumps due to waveform generator reset.
+    # One can use BYPASS cal for phase offset instead of LNA to capture
+    # phase jumps due to waveform generator reset (a common source).
     lna_ofs_phs = np.nanmean(
         np.unwrap(np.angle(lna_mean[idx_rxs_active]))
     )
-    scalar_ofs = (caltone_ofs_mag / 1945.0) * np.exp(1j * lna_ofs_phs)
+    scalar_ofs = (caltone_ofs_mag / CALTONE_NORM) * np.exp(1j * lna_ofs_phs)
     # peak normalized and apply complex scalar offset
     max_ratio = scalar_ofs * np.nanmax(abs(lna_caltone_ratio))
     if not np.isclose(max_ratio, 0):
