@@ -217,6 +217,8 @@ class AntennaPattern:
         process applied to all bands and polarizations.
     apply_pulse_ext: bool, default=False
         Whether or not apply pulse extension.
+    apply_lna2caltone: bool, default=True
+        Whether or not apply LNA/CALTONE ratio as secondary RX imbalances.
 
     """
 
@@ -230,7 +232,8 @@ class AntennaPattern:
                  caltone_freq=None,
                  delay_ofs_dbf=-2.1474e-6,
                  remove_toggling_tx=False,
-                 apply_pulse_ext=False):
+                 apply_pulse_ext=False,
+                 apply_lna2caltone=True):
 
         self.orbit = orbit.copy()
         self.attitude = attitude.copy()
@@ -244,7 +247,10 @@ class AntennaPattern:
         else:
             log.warning('No pulse ext will be applied')
             self.pw_ext = None
-
+        self.apply_lna2caltone = apply_lna2caltone
+        if not self.apply_lna2caltone:
+            log.warning(
+                'LNA/CALTONE ratio will NOT be used as imbalance in RX-DBF!')
         # get frequency band
         freqs = np.sort(raw.frequencies)
         if freq_band is None:
@@ -470,8 +476,13 @@ class AntennaPattern:
             # combine channel adjustment from both internally computed
             # RX imbalance (LNA/CALTONE) and secondary correction from
             # input INST HDF5 product
-            channel_adj_fact_rx = (
-                self.rx_imb[self.freq_band, txrx_pol].lna_caltone_ratio.copy())
+            if self.apply_lna2caltone:
+                channel_adj_fact_rx = (
+                    self.rx_imb[self.freq_band, txrx_pol].lna_caltone_ratio.copy()
+                )
+            else:
+                channel_adj_fact_rx = np.ones_like(
+                    self.rx_imb[self.freq_band, txrx_pol].lna_caltone_ratio)
             if self.channel_adj_fact_rx[rxp] is not None:
                 channel_adj_fact_rx = channel_adj_fact_rx * np.asarray(
                     self.channel_adj_fact_rx[rxp])
