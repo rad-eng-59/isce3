@@ -215,7 +215,7 @@ class AntennaPattern:
     delay_ofs_dbf: float, default=-2.1474e-6
         Delay offset (seconds) in data window position of onboard DBF
         process applied to all bands and polarizations.
-    apply_pulse_ext: bool, default=True
+    apply_pulse_ext: bool, default=False
         Whether or not apply pulse extension.
 
     """
@@ -230,7 +230,7 @@ class AntennaPattern:
                  caltone_freq=None,
                  delay_ofs_dbf=-2.1474e-6,
                  remove_toggling_tx=False,
-                 apply_pulse_ext=True):
+                 apply_pulse_ext=False):
 
         self.orbit = orbit.copy()
         self.attitude = attitude.copy()
