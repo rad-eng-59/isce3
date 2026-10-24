@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import h5py
 import numpy as np
 import re
 from dataclasses import dataclass
 import typing
 
 from isce3 import antenna as ant
+from nisar.products.readers.Base import H5pyFile
 
 
 @dataclass
@@ -78,8 +78,8 @@ class AntennaParser:
 
     def __init__(self, filename):
         self._filename = filename
-        self._fid = h5py.File(filename, mode='r', libver='latest',
-                              swmr=True)
+        self._fid = H5pyFile(filename, mode='r', libver='latest',
+                             swmr=True)
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self._filename})"

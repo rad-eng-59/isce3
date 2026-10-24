@@ -6,6 +6,35 @@ import journal
 import pyre
 import isce3
 from ..protocols import ProductReader
+from contextlib import contextmanager
+import boto3
+
+
+class H5pyFile(h5py.File):
+    """
+    A wrapper around h5py.File class to handle remote s3 URL location top of
+    local one for HDF5 in `name`
+    """
+    def __init__(self, name, mode = 'r', **kwargs):
+        if isinstance(name, str) and name.startswith('s3://'):
+            if mode != 'r':
+                raise ValueError(
+                    f'Only read mode is supported for s3 but got "{mode}"!')
+            # s3 bucket
+            profile_name = os.environ.get('AWS_PROFILE')
+            aws_session = boto3.Session(profile_name=profile_name)
+            creds = aws_session.get_credentials().get_frozen_credentials()
+            region_name = aws_session.region_name
+            kw = dict()
+            kw['aws_region'] = region_name.encode('utf-8')
+            kw['secret_id'] = creds.access_key.encode('utf-8')
+            kw['secret_key'] = creds.secret_key.encode('utf-8')
+            kw['session_token'] = creds.token.encode('utf-8')
+            if 'swmr' in kwargs:
+                kwargs.pop('swmr')
+            super().__init__(name, mode, driver="ros3", **kw, **kwargs)
+        else:
+            super().__init__(name, mode, **kwargs)
 
 
 def get_hdf5_file_root_path(filename: str, root_path: str = None) -> str:
@@ -31,7 +60,7 @@ def get_hdf5_file_root_path(filename: str, root_path: str = None) -> str:
 
     SCIENCE_PATH = '/science/'
     NISAR_SENSOR_LIST = ['SSAR', 'LSAR']
-    with h5py.File(filename, 'r', libver='latest', swmr=True) as f:
+    with H5pyFile(filename, 'r', libver='latest', swmr=True) as f:
         if root_path is not None and root_path in f:
             return root_path
         science_group = f[SCIENCE_PATH]
@@ -167,7 +196,7 @@ class Base(pyre.component,
         '''
         extracts orbit
         '''
-        with h5py.File(self.filename, 'r', libver='latest', swmr=True) as fid:
+        with H5pyFile(self.filename, 'r', libver='latest', swmr=True) as fid:
             orbitPath = os.path.join(self.MetadataPath, 'orbit')
             return isce3.core.load_orbit_from_h5_group(fid[orbitPath])
 
@@ -176,7 +205,7 @@ class Base(pyre.component,
         '''
         extracts attitude
         '''
-        with h5py.File(self.filename, 'r', libver='latest', swmr=True) as fid:
+        with H5pyFile(self.filename, 'r', libver='latest', swmr=True) as fid:
             attitudePath = _join_paths(self.MetadataPath, 'attitude')
             return isce3.core.Attitude.load_from_h5(fid[attitudePath])
 
@@ -207,7 +236,7 @@ class Base(pyre.component,
                                           'parameters/slantRange')
 
         # extract the native Doppler dataset
-        with h5py.File(self.filename, 'r', libver='latest', swmr=True) as fid:
+        with H5pyFile(self.filename, 'r', libver='latest', swmr=True) as fid:
 
             if zero_doppler_time_dataset_path not in fid:
                 zero_doppler_time_dataset_path = \
@@ -234,7 +263,7 @@ class Base(pyre.component,
 
         zeroDopplerTimePath = os.path.join(self.SwathPath,
                                           'zeroDopplerTime')
-        with h5py.File(self.filename, 'r', libver='latest', swmr=True) as fid:
+        with H5pyFile(self.filename, 'r', libver='latest', swmr=True) as fid:
             zeroDopplerTime = fid[zeroDopplerTimePath][:]
 
         return zeroDopplerTime
@@ -249,7 +278,7 @@ class Base(pyre.component,
         slantRangePath = os.path.join(self.SwathPath,
                                       'frequency' + frequency, 'slantRange')
 
-        with h5py.File(self.filename, 'r', libver='latest', swmr=True) as fid:
+        with H5pyFile(self.filename, 'r', libver='latest', swmr=True) as fid:
             slantRange = fid[slantRangePath][:]
 
         return slantRange
@@ -271,7 +300,7 @@ class Base(pyre.component,
         else:
             folder = self.SwathPath
 
-        with h5py.File(self.filename, 'r', libver='latest', swmr=True) as fid:
+        with H5pyFile(self.filename, 'r', libver='latest', swmr=True) as fid:
             for freq in frequencyList:
                 root = os.path.join(folder, 'frequency{0}'.format(freq))
                 polList = extractWithIterator(fid[root], 'listOfPolarizations', bytestring,
@@ -334,7 +363,7 @@ class Base(pyre.component,
         '''
         from .Identification import Identification
 
-        with h5py.File(self.filename, 'r', libver='latest', swmr=True) as fileID:
+        with H5pyFile(self.filename, 'r', libver='latest', swmr=True) as fileID:
             h5grp = fileID[self.IdentificationPath]
             self.identification = Identification(h5grp)
 
